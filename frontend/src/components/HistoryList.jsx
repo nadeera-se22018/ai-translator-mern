@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { toggleFavorite, setHistoryTab } from '../features/translation/translationSlice';
+import { toggleFavorite, setHistoryTab, loadTranslation } from '../features/translation/translationSlice';
 
 const HistoryList = () => {
   const dispatch = useDispatch();
@@ -43,10 +43,17 @@ const HistoryList = () => {
           {currentList.map((item, index) => (
             <div
               key={item._id || index}
-              className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/50 dark:border-white/5 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative group"
+              onClick={() => {
+                dispatch(loadTranslation(item));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/50 dark:border-white/5 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer"
             >
               <button
-                onClick={() => dispatch(toggleFavorite(item))}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch(toggleFavorite(item));
+                }}
                 className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10"
               >
                 <svg className={`w-5 h-5 ${isFavorite(item) ? 'text-yellow-500 fill-yellow-500' : 'text-slate-300 dark:text-slate-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">

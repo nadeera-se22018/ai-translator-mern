@@ -132,6 +132,19 @@ const translationSlice = createSlice({
     },
     setHistoryTab: (state, action) => {
       state.historyTab = action.payload;
+    },
+    loadTranslation: (state, action) => {
+      const { inputText, translatedText, sourceLanguage, targetLanguage, mode } = action.payload;
+      state.inputText = inputText;
+      state.translatedText = translatedText;
+      state.sourceLanguage = sourceLanguage;
+      state.targetLanguage = targetLanguage;
+      if (mode) {
+        state.translationMode = mode;
+      }
+      // Populate cache for the selected mode
+      state.cachedTranslations[mode || state.translationMode] = translatedText;
+      state.error = null;
     }
   },
   extraReducers: (builder) => {
@@ -174,7 +187,8 @@ export const {
   swapLanguages,
   clearError,
   toggleFavorite,
-  setHistoryTab
+  setHistoryTab,
+  loadTranslation
 } = translationSlice.actions;
 
 export default translationSlice.reducer;
