@@ -81,10 +81,12 @@ const translationSlice = createSlice({
   initialState,
   reducers: {
     setInputText: (state, action) => {
+      // Stale cache protection: only clear cache if the input text has actually changed or is cleared
+      if (action.payload === '' || action.payload !== state.inputText) {
+        state.translatedText = '';
+        state.cachedTranslations = { normal: '', gemini: '', groq: '' };
+      }
       state.inputText = action.payload;
-      // Whenever input changes, clear the cached translations and output
-      state.translatedText = '';
-      state.cachedTranslations = { normal: '', gemini: '', groq: '' };
       state.error = null;
     },
     setTranslationMode: (state, action) => {
