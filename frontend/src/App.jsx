@@ -6,6 +6,7 @@ import TranslationBox from './components/TranslationBox';
 import HistoryList from './components/HistoryList';
 import SettingsModal from './components/SettingsModal';
 import AuthModal from './components/AuthModal';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const dispatch = useDispatch();
@@ -28,6 +29,7 @@ function App() {
 
   return (
     <div className={`min-h-screen bg-slate-50 dark:bg-[#090b10] ${fontFamily} text-slate-900 dark:text-slate-100 flex flex-col relative overflow-x-hidden transition-colors duration-500`}>
+      <Toaster position="top-center" reverseOrder={false} />
       
       {/* Stunning Mixed Color Wallpapers / Gradients */}
       {theme === 'dark' ? (

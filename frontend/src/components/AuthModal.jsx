@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, registerUser, resetAuth, toggleAuthModal } from '../features/auth/authSlice';
+import { toast } from 'react-hot-toast';
 import { fetchHistory } from '../features/translation/translationSlice';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
@@ -67,7 +68,7 @@ const AuthModal = () => {
 
       if (!res.ok) {
         const errorData = await res.json();
-        alert(errorData.error || 'Google login failed');
+        toast.error(errorData.error || 'Google login failed');
         return;
       }
 

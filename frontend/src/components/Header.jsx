@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toggleTheme, toggleSettings } from '../features/settings/settingsSlice';
+import { toast } from 'react-hot-toast';
 import { toggleAuthModal } from '../features/auth/authSlice';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
@@ -60,7 +61,7 @@ const Header = () => {
       }
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
+      toast.success('Link copied to clipboard!');
     }
   };
 
@@ -81,7 +82,7 @@ const Header = () => {
 
       if (!res.ok) {
         const errorData = await res.json();
-        alert(errorData.error || 'Google login failed');
+        toast.error(errorData.error || 'Google login failed');
         return;
       }
 
