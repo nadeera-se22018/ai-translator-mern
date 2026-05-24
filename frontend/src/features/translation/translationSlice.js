@@ -16,7 +16,7 @@ export const translateText = createAsyncThunk(
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch('http://localhost:5005/api/translate', {
+      const response = await fetch('https://ai-translator-backend-six.vercel.app/api/translate', {
         method: 'POST',
         headers,
         body: JSON.stringify({ inputText, sourceLanguage, targetLanguage, mode }),
@@ -44,7 +44,7 @@ export const fetchHistory = createAsyncThunk(
 
       if (!token) return thunkAPI.rejectWithValue('No token');
 
-      const response = await fetch('http://localhost:5005/api/translate/history', {
+      const response = await fetch('https://ai-translator-backend-six.vercel.app/api/translate/history', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

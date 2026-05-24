@@ -71,7 +71,7 @@ const Header = () => {
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      const res = await fetch('http://localhost:5005/api/auth/google', {
+      const res = await fetch('https://ai-translator-backend-six.vercel.app/api/auth/google', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
