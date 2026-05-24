@@ -30,6 +30,82 @@ const TranslationBox = () => {
   const { fontSize, fontColor, fontFamily } = useSelector((state) => state.settings);
 
   const [copied, setCopied] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const speechUtteranceRef = useRef(null);
+
+  const LANGUAGE_LOCALES = {
+    'English': 'en-US',
+    'Sinhala': 'si-LK',
+    'Spanish': 'es-ES',
+    'French': 'fr-FR',
+    'German': 'de-DE',
+    'Italian': 'it-IT',
+    'Portuguese': 'pt-PT',
+    'Russian': 'ru-RU',
+    'Japanese': 'ja-JP',
+    'Korean': 'ko-KR',
+    'Chinese (Simplified)': 'zh-CN',
+    'Arabic': 'ar-SA',
+    'Hindi': 'hi-IN'
+  };
+
+  useEffect(() => {
+    // Cleanup synthesis on unmount
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Cancel speaking if translated text changes or is cleared
+    if (window.speechSynthesis && !translatedText) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  }, [translatedText]);
+
+  const handleSpeak = () => {
+    if (!window.speechSynthesis) {
+      alert('Text-to-Speech is not supported in this browser.');
+      return;
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    const textToSpeak = translatedText.trim();
+    if (!textToSpeak) return;
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    speechUtteranceRef.current = utterance;
+
+    const locale = LANGUAGE_LOCALES[targetLanguage] || 'en-US';
+    const voices = window.speechSynthesis.getVoices();
+    
+    // Find matching voice or language prefix
+    let voice = voices.find(v => v.lang.toLowerCase() === locale.toLowerCase() || v.lang.toLowerCase().startsWith(locale.toLowerCase().split('-')[0]));
+    
+    if (voice) {
+      utterance.voice = voice;
+    }
+    utterance.lang = locale;
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+    };
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handleCopy = () => {
     if (translatedText) {
@@ -41,6 +117,10 @@ const TranslationBox = () => {
 
   const handleClear = () => {
     dispatch(setInputText(''));
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
   };
 
   const currentIsFavorite = favorites && favorites.some(
@@ -201,10 +281,32 @@ const TranslationBox = () => {
             />
             {translatedText && (
               <div className="absolute right-4 sm:right-6 flex items-center gap-1 sm:gap-2">
+                {/* Speaker/Listen Button */}
+                <button 
+                  onClick={handleSpeak}
+                  className={`p-1.5 sm:p-2 rounded-full transition-all duration-200 cursor-pointer ${
+                    isSpeaking 
+                      ? 'text-blue-500 bg-blue-500/10 dark:bg-blue-500/20 animate-pulse' 
+                      : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-500'
+                  }`}
+                  title={isSpeaking ? "Stop speaking" : "Listen to translation"}
+                >
+                  {isSpeaking ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H10a1 1 0 01-1-1v-4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                  )}
+                </button>
+
                 {/* Copy Button */}
                 <button 
                   onClick={handleCopy}
-                  className="p-1.5 sm:p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all duration-200"
+                  className="p-1.5 sm:p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all duration-200 cursor-pointer"
                   title="Copy translation"
                 >
                   {copied ? (
