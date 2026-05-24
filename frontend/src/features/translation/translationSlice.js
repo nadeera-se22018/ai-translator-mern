@@ -1,27 +1,63 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { logout } from '../auth/authSlice';
 
 // Async thunk for the translation API call
 export const translateText = createAsyncThunk(
   'translation/translateText',
-  async ({ inputText, sourceLanguage, targetLanguage }, { rejectWithValue }) => {
+  async ({ inputText, sourceLanguage, targetLanguage, mode }, thunkAPI) => {
     try {
-      const response = await fetch('http://localhost:5000/api/translate', {
+      const state = thunkAPI.getState();
+      const token = state.auth.user ? state.auth.user.token : null;
+
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('http://localhost:5005/api/translate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ inputText, sourceLanguage, targetLanguage }),
+        headers,
+        body: JSON.stringify({ inputText, sourceLanguage, targetLanguage, mode }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        return rejectWithValue(errorData.error || 'Failed to translate');
+        return thunkAPI.rejectWithValue(errorData.error || 'Failed to translate');
       }
 
       const result = await response.json();
       return result.data; // { inputText, translatedText, sourceLanguage, targetLanguage, _id, createdAt }
     } catch (error) {
-      return rejectWithValue(error.message || 'Network error occurred');
+      return thunkAPI.rejectWithValue(error.message || 'Network error occurred');
+    }
+  }
+);
+
+export const fetchHistory = createAsyncThunk(
+  'translation/fetchHistory',
+  async (_, thunkAPI) => {
+    try {
+      const state = thunkAPI.getState();
+      const token = state.auth.user ? state.auth.user.token : null;
+
+      if (!token) return thunkAPI.rejectWithValue('No token');
+
+      const response = await fetch('http://localhost:5005/api/translate/history', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return thunkAPI.rejectWithValue('Failed to fetch history');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(error.message || 'Network error');
     }
   }
 );
@@ -31,9 +67,13 @@ const initialState = {
   translatedText: '',
   sourceLanguage: 'English',
   targetLanguage: 'Sinhala',
+  translationMode: 'groq', // 'normal', 'gemini', or 'groq'
   isLoading: false,
   error: null,
   history: [],
+  favorites: [],
+  historyTab: 'history', // 'history' or 'favorites'
+  cachedTranslations: { normal: '', gemini: '', groq: '' } // Caches translations for current inputText
 };
 
 const translationSlice = createSlice({
@@ -42,11 +82,22 @@ const translationSlice = createSlice({
   reducers: {
     setInputText: (state, action) => {
       state.inputText = action.payload;
-      // Clear translated text and errors when input changes significantly
-      if (action.payload === '') {
-        state.translatedText = '';
-        state.error = null;
-      }
+      // Whenever input changes, clear the cached translations and output
+      state.translatedText = '';
+      state.cachedTranslations = { normal: '', gemini: '', groq: '' };
+      state.error = null;
+    },
+    setTranslationMode: (state, action) => {
+      state.translationMode = action.payload;
+      // Restore cached translation instantly when mode changes
+      state.translatedText = state.cachedTranslations[action.payload] || '';
+    },
+    setTranslatedText: (state, action) => {
+      state.translatedText = action.payload;
+    },
+    clearTranslationCache: (state) => {
+      state.translatedText = '';
+      state.cachedTranslations = { normal: '', gemini: '', groq: '' };
     },
     setSourceLanguage: (state, action) => {
       state.sourceLanguage = action.payload;
@@ -59,7 +110,6 @@ const translationSlice = createSlice({
       state.sourceLanguage = state.targetLanguage;
       state.targetLanguage = temp;
       
-      // Also swap texts if they exist
       if (state.translatedText) {
         state.inputText = state.translatedText;
         state.translatedText = '';
@@ -67,6 +117,19 @@ const translationSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    toggleFavorite: (state, action) => {
+      const existingIndex = state.favorites.findIndex(
+        (fav) => fav.inputText === action.payload.inputText && fav.translatedText === action.payload.translatedText
+      );
+      if (existingIndex >= 0) {
+        state.favorites.splice(existingIndex, 1);
+      } else {
+        state.favorites.unshift(action.payload);
+      }
+    },
+    setHistoryTab: (state, action) => {
+      state.historyTab = action.payload;
     }
   },
   extraReducers: (builder) => {
@@ -78,10 +141,10 @@ const translationSlice = createSlice({
       .addCase(translateText.fulfilled, (state, action) => {
         state.isLoading = false;
         state.translatedText = action.payload.translatedText;
-        // Add to history
+        // Save the successful translation in our cache for the current mode
+        state.cachedTranslations[state.translationMode] = action.payload.translatedText;
         state.history.unshift(action.payload);
-        // Keep history at a reasonable size (e.g., 20 items)
-        if (state.history.length > 20) {
+        if (state.history.length > 30) {
           state.history.pop();
         }
       })
@@ -89,16 +152,27 @@ const translationSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
         state.translatedText = '';
+      })
+      .addCase(fetchHistory.fulfilled, (state, action) => {
+        state.history = action.payload;
+      })
+      .addCase(logout, (state) => {
+        state.history = [];
       });
   },
 });
 
 export const { 
   setInputText, 
+  setTranslationMode,
+  setTranslatedText,
+  clearTranslationCache,
   setSourceLanguage, 
   setTargetLanguage, 
   swapLanguages,
-  clearError
+  clearError,
+  toggleFavorite,
+  setHistoryTab
 } = translationSlice.actions;
 
 export default translationSlice.reducer;
