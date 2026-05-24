@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const translationSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false,
+    ref: 'User',
+  },
   inputText: {
     type: String,
     required: true,
