@@ -3,6 +3,9 @@ const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', {
@@ -71,6 +74,71 @@ router.post('/login', async (req, res) => {
     }
   } catch (error) {
     console.error(error);
+    res.status(500).json({ error: 'Server Error' });
+  }
+});
+
+// @desc    Authenticate with Google
+// @route   POST /api/auth/google
+router.post('/google', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Verify token with Google API
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch (err) {
+      console.error('Google token verification failed:', err);
+      return res.status(400).json({ error: 'Invalid Google token' });
+    }
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, name, email, picture: avatar } = payload;
+
+    // Check if user already exists by googleId or email
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      // If user exists but didn't have googleId or avatar linked, link it now
+      let isModified = false;
+      if (!user.googleId) {
+        user.googleId = googleId;
+        isModified = true;
+      }
+      if (!user.avatar && avatar) {
+        user.avatar = avatar;
+        isModified = true;
+      }
+      if (isModified) {
+        await user.save();
+      }
+    } else {
+      // Create user
+      user = await User.create({
+        googleId,
+        name,
+        email,
+        avatar,
+      });
+    }
+
+    res.status(200).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      token: generateToken(user._id),
+    });
+  } catch (error) {
+    console.error('Google Auth Error:', error);
     res.status(500).json({ error: 'Server Error' });
   }
 });
