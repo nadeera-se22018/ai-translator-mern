@@ -103,8 +103,18 @@ router.post('/google', async (req, res) => {
     const payload = ticket.getPayload();
     const { sub: googleId, name, email, picture: avatar } = payload;
 
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required from Google account' });
+    }
+
+    // Safely build the query to avoid Mongoose stripping undefined to {}
+    const query = [{ googleId }];
+    if (email) {
+      query.push({ email });
+    }
+
     // Check if user already exists by googleId or email
-    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+    let user = await User.findOne({ $or: query });
 
     if (user) {
       // If user exists but didn't have googleId or avatar linked, link it now
@@ -121,12 +131,12 @@ router.post('/google', async (req, res) => {
         await user.save();
       }
     } else {
-      // Create user
+      // Create user with fallbacks
       user = await User.create({
         googleId,
-        name,
+        name: name || email.split('@')[0], // Fallback if name is missing
         email,
-        avatar,
+        avatar: avatar || '',
       });
     }
 
@@ -139,7 +149,8 @@ router.post('/google', async (req, res) => {
     });
   } catch (error) {
     console.error('Google Auth Error:', error);
-    res.status(500).json({ error: 'Server Error' });
+    // Send actual error message to client for better debugging
+    res.status(500).json({ error: 'Server Error: ' + (error.message || 'Unknown Error') });
   }
 });
 
