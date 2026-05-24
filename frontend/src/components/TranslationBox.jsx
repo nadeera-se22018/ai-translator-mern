@@ -35,6 +35,10 @@ const TranslationBox = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const speechUtteranceRef = useRef(null);
 
+  // Speech-to-Text State
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+
   // Performance Optimization: Local state for typing at 60fps
   const [localInputText, setLocalInputText] = useState(inputText);
 
@@ -55,10 +59,13 @@ const TranslationBox = () => {
   };
 
   useEffect(() => {
-    // Cleanup synthesis on unmount
+    // Cleanup synthesis and recognition on unmount
     return () => {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
+      }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
       }
     };
   }, []);
@@ -122,6 +129,54 @@ const TranslationBox = () => {
 
     setIsSpeaking(true);
     window.speechSynthesis.speak(utterance);
+  };
+
+  const handleMicClick = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Speech Recognition is not supported in this browser. Please try Chrome or Safari.');
+      return;
+    }
+
+    if (isRecording) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    const locale = LANGUAGE_LOCALES[sourceLanguage] || 'en-US';
+    recognition.lang = locale;
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript) {
+        setLocalInputText(prev => prev ? `${prev} ${transcript}` : transcript);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      if (event.error !== 'no-speech') {
+        toast.error(`Speech recognition failed: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
   };
 
   const handleCopy = () => {
@@ -290,16 +345,42 @@ const TranslationBox = () => {
               // RULE 2: No OnChange Fetching. Only updates local state, NEVER triggers API.
               onChange={handleInputChange}
             />
-            {localInputText && (
-              <motion.button 
+            <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-1.5 sm:gap-2">
+              {/* Microphone / Speech-to-Text Button */}
+              <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={handleClear}
-                className="absolute top-4 right-4 sm:top-6 sm:right-6 p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                onClick={handleMicClick}
+                className={`p-1.5 sm:p-2 rounded-full transition-all duration-200 cursor-pointer ${
+                  isRecording 
+                    ? 'text-red-500 bg-red-500/10 dark:bg-red-500/20 animate-pulse' 
+                    : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-red-500'
+                }`}
+                title={isRecording ? "Stop recording" : "Translate with your voice"}
               >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                {isRecording ? (
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1H9a1 1 0 01-1-1V7z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                )}
               </motion.button>
-            )}
+
+              {localInputText && (
+                <motion.button 
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleClear}
+                  className="p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                  title="Clear input"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </motion.button>
+              )}
+            </div>
           </div>
         </div>
 
