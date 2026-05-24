@@ -4,7 +4,7 @@ import { toggleTheme, toggleSettings } from '../features/settings/settingsSlice'
 import { toast } from 'react-hot-toast';
 import { toggleAuthModal } from '../features/auth/authSlice';
 import { GoogleLogin } from '@react-oauth/google';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 import { setHistoryTab } from '../features/translation/translationSlice';
 

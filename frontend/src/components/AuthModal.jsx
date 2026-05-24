@@ -4,7 +4,7 @@ import { loginUser, registerUser, resetAuth, toggleAuthModal } from '../features
 import { toast } from 'react-hot-toast';
 import { fetchHistory } from '../features/translation/translationSlice';
 import { GoogleLogin } from '@react-oauth/google';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 const AuthModal = () => {
   const [isLogin, setIsLogin] = useState(true);

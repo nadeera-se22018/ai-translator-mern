@@ -292,7 +292,8 @@ const TranslationBox = () => {
             />
             {localInputText && (
               <motion.button 
-                whileTap={{ scale: 0.90 }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={handleClear}
                 className="absolute top-4 right-4 sm:top-6 sm:right-6 p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-all cursor-pointer"
               >
@@ -315,7 +316,8 @@ const TranslationBox = () => {
               <div className="absolute right-4 sm:right-6 flex items-center gap-1 sm:gap-2">
                 {/* Speaker/Listen Button */}
                 <motion.button 
-                  whileTap={{ scale: 0.90 }}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={handleSpeak}
                   className={`p-1.5 sm:p-2 rounded-full transition-all duration-200 cursor-pointer ${
                     isSpeaking 
@@ -338,7 +340,8 @@ const TranslationBox = () => {
 
                 {/* Copy Button */}
                 <motion.button 
-                  whileTap={{ scale: 0.90 }}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={handleCopy}
                   className="p-1.5 sm:p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all duration-200 cursor-pointer"
                   title="Copy translation"
@@ -352,7 +355,8 @@ const TranslationBox = () => {
 
                 {/* Favorite Button */}
                 <motion.button 
-                  whileTap={{ scale: 0.90 }}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={handleFavorite} 
                   className="p-1.5 sm:p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all duration-200 cursor-pointer" 
                   title="Favorite translation"
@@ -370,20 +374,29 @@ const TranslationBox = () => {
             )}
           </div>
           
-          {/* Output Area */}
-          <div className="relative flex-1 p-4 sm:p-6 flex flex-col">
-            <div className={`w-full flex-1 overflow-y-auto font-medium transition-all duration-300 leading-relaxed ${fontSize} ${isLoading ? 'animate-pulse text-blue-400 dark:text-blue-500/50' : fontColor.replace('text-slate-800', 'text-blue-900').replace('text-slate-100', 'text-blue-100')}`}>
-              {translatedText || (
-                <span className="text-slate-400/50 dark:text-slate-500/40 italic text-lg sm:text-xl">Translation</span>
-              )}
-            </div>
+          {/* Output Area with sleek pulsing skeleton layout */}
+          <div className="relative flex-1 p-4 sm:p-6 flex flex-col justify-between">
+            {isLoading ? (
+              <div className="space-y-4 animate-pulse w-full flex-1 pt-1">
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-lg w-5/6"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-lg w-2/3"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-lg w-3/4"></div>
+              </div>
+            ) : (
+              <div className={`w-full flex-1 overflow-y-auto font-medium transition-all duration-300 leading-relaxed ${fontSize} ${fontColor.replace('text-slate-800', 'text-blue-900').replace('text-slate-100', 'text-blue-100')}`}>
+                {translatedText || (
+                  <span className="text-slate-400/50 dark:text-slate-500/40 italic text-lg sm:text-xl">Translation</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Desktop Swap Button Overlay */}
         <div className="hidden md:flex absolute left-1/2 top-[52px] -translate-x-1/2 -translate-y-1/2 z-10">
           <motion.button 
-            whileTap={{ scale: 0.90 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={handleSwap}
             className="p-3 rounded-full bg-white dark:bg-[#1a1d27] border border-slate-200 dark:border-slate-700/80 text-slate-400 hover:text-blue-500 shadow-lg hover:shadow-blue-500/20 transition-all hover:scale-110 active:scale-95 cursor-pointer"
             title="Swap languages"
