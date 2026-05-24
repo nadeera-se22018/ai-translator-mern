@@ -74,21 +74,31 @@ router.post('/', optionalAuth, async (req, res) => {
     }
 
     // Save to database
-    const newTranslation = new Translation({
-      inputText,
-      translatedText,
-      sourceLanguage,
-      targetLanguage,
-      mode,
-      user: req.user ? req.user._id : undefined
-    });
-
-    const savedTranslation = await newTranslation.save();
+    let savedTranslation = null;
+    try {
+      const newTranslation = new Translation({
+        inputText,
+        translatedText,
+        sourceLanguage,
+        targetLanguage,
+        mode,
+        user: req.user ? req.user._id : undefined
+      });
+      savedTranslation = await newTranslation.save();
+    } catch (dbError) {
+      console.error("MongoDB save failed/timed out:", dbError.message);
+    }
 
     // Return the result
     return res.status(201).json({
       success: true,
-      data: savedTranslation
+      data: savedTranslation || {
+        inputText,
+        translatedText,
+        sourceLanguage,
+        targetLanguage,
+        mode
+      }
     });
 
   } catch (error) {
