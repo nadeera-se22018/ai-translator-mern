@@ -22,6 +22,11 @@ const translationSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  mode: {
+    type: String,
+    required: false,
+    default: 'groq',
+  },
   createdAt: {
     type: Date,
     default: Date.now,
