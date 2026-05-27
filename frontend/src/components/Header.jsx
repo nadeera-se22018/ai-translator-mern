@@ -94,7 +94,7 @@ const Header = () => {
   };
 
   return (
-    <header className="w-full py-3.5 sm:py-5 px-3 sm:px-6 lg:px-12 xl:px-24 sticky top-0 z-50 bg-white/70 dark:bg-[#0f1117]/70 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 transition-colors duration-500">
+    <header className="w-full py-3.5 sm:py-5 px-3 sm:px-6 lg:px-12 xl:px-24 sticky top-0 z-50 bg-white/70 dark:bg-[#0f1117]/70 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 transition-colors duration-300 transform-gpu will-change-[transform,backdrop-filter]">
       <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-2">
         
         {/* Logo Area */}
