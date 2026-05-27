@@ -255,11 +255,11 @@ const TranslationBox = () => {
       
       {/* Mode Toggle Switch */}
       <div className="flex justify-center mb-6">
-        <div className="inline-flex bg-slate-200/50 dark:bg-slate-800/50 backdrop-blur-md p-1 rounded-xl sm:rounded-2xl shadow-inner border border-slate-300/30 dark:border-slate-700/30 gap-0.5 sm:gap-1">
+        <div className="inline-flex bg-slate-200/50 dark:bg-slate-800/50 backdrop-blur-md p-1 rounded-xl sm:rounded-2xl shadow-inner border border-slate-300/30 dark:border-slate-700/30 gap-0.5 sm:gap-1 transform-gpu will-change-[transform,backdrop-filter]">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => dispatch(setTranslationMode('normal'))}
-            className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
+            className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-[color,background-color,border-color,box-shadow,transform] duration-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
               translationMode === 'normal' 
                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-md transform scale-100' 
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 scale-95 hover:scale-100'
@@ -272,7 +272,7 @@ const TranslationBox = () => {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => dispatch(setTranslationMode('gemini'))}
-            className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
+            className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-[color,background-color,border-color,box-shadow,transform] duration-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
               translationMode === 'gemini' 
                 ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md transform scale-100' 
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 scale-95 hover:scale-100'
@@ -285,7 +285,7 @@ const TranslationBox = () => {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => dispatch(setTranslationMode('groq'))}
-            className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
+            className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-[color,background-color,border-color,box-shadow,transform] duration-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
               translationMode === 'groq' 
                 ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md transform scale-100' 
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 scale-95 hover:scale-100'
@@ -316,7 +316,7 @@ const TranslationBox = () => {
       )}
 
       {/* Unified Translation Card - High Performance Optimized Glassmorphism - GPU Accelerated */}
-      <div className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-black/50 border border-slate-200/60 dark:border-slate-800/80 overflow-hidden relative transition-all duration-300 flex flex-col md:flex-row min-h-[300px] md:min-h-[350px] lg:min-h-[400px] transform-gpu ${fontFamily}`}>
+      <div className={`bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-black/50 border border-slate-200/60 dark:border-slate-800/80 overflow-hidden relative transition-colors duration-300 flex flex-col md:flex-row min-h-[300px] md:min-h-[350px] lg:min-h-[400px] transform-gpu will-change-[transform,backdrop-filter] ${fontFamily}`}>
           
         {/* Source Box */}
         <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800/60">
@@ -339,7 +339,7 @@ const TranslationBox = () => {
           {/* Input Area */}
           <div className="relative flex-1 p-4 sm:p-6 flex flex-col">
             <textarea
-              className={`w-full flex-1 resize-none bg-transparent outline-none font-medium placeholder-slate-400/70 transition-all duration-300 leading-relaxed ${fontSize} ${fontColor}`}
+              className={`w-full flex-1 resize-none bg-transparent outline-none font-medium placeholder-slate-400/70 transition-colors duration-200 leading-relaxed ${fontSize} ${fontColor}`}
               placeholder="Translate..."
               value={localInputText}
               // RULE 2: No OnChange Fetching. Only updates local state, NEVER triggers API.
@@ -464,7 +464,7 @@ const TranslationBox = () => {
                 <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-lg w-3/4"></div>
               </div>
             ) : (
-              <div className={`w-full flex-1 overflow-y-auto font-medium transition-all duration-300 leading-relaxed ${fontSize} ${fontColor.replace('text-slate-800', 'text-blue-900').replace('text-slate-100', 'text-blue-100')}`}>
+              <div className={`w-full flex-1 overflow-y-auto font-medium transition-colors duration-200 leading-relaxed ${fontSize} ${fontColor.replace('text-slate-800', 'text-blue-900').replace('text-slate-100', 'text-blue-100')}`}>
                 {translatedText || (
                   <span className="text-slate-400/50 dark:text-slate-500/40 italic text-lg sm:text-xl">Translation</span>
                 )}
@@ -494,7 +494,7 @@ const TranslationBox = () => {
           whileTap={{ scale: 0.95 }}
           onClick={handleClear}
           disabled={!localInputText.trim()}
-          className={`flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg border-2 transition-all duration-300 min-w-[120px] sm:min-w-[150px] cursor-pointer
+          className={`flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg border-2 transition-[color,background-color,border-color,transform] duration-200 min-w-[120px] sm:min-w-[150px] cursor-pointer
             ${!localInputText.trim() 
               ? 'border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed bg-transparent' 
               : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-[0.98]'
@@ -509,7 +509,7 @@ const TranslationBox = () => {
           onClick={handleTranslate}
           // RULE 4: Prevent Spam by functionally disabling button while loading
           disabled={isLoading || !localInputText.trim()}
-          className={`flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-10 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg text-white transition-all duration-300 min-w-[160px] sm:min-w-[200px] shadow-lg cursor-pointer
+          className={`flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-10 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg text-white transition-[color,background-color,border-color,box-shadow,transform] duration-200 min-w-[160px] sm:min-w-[200px] shadow-lg cursor-pointer
             ${(isLoading || !localInputText.trim()) 
               ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none' 
               : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] hover:shadow-blue-500/20'
