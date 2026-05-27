@@ -39,6 +39,8 @@ const TranslationBox = () => {
   // Speech-to-Text State
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   // Performance Optimization: Local state for typing at 60fps
   const [localInputText, setLocalInputText] = useState(inputText);
@@ -71,6 +73,9 @@ const TranslationBox = () => {
       }
       if (recognitionRef.current) {
         recognitionRef.current.stop();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
       }
     };
   }, []);
@@ -195,6 +200,68 @@ const TranslationBox = () => {
     }
   };
 
+  const startUniversalRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        setIsRecording(false);
+        // Stop all tracks to release the mic
+        stream.getTracks().forEach(track => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size < 1000) return; // Too short
+
+        // Create a custom toast promise for elegant status tracking
+        const transcribePromise = (async () => {
+          const response = await fetch('/api/translate/transcribe', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'audio/webm',
+              'x-source-language': sourceLanguage
+            },
+            body: audioBlob
+          });
+          
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Transcription failed');
+          }
+          
+          const data = await response.json();
+          if (data.text && data.text.trim()) {
+            setLocalInputText(prev => prev ? `${prev.trim()} ${data.text.trim()}` : data.text.trim());
+            return data.text;
+          } else {
+            throw new Error('No speech detected. Please speak closer to the mic.');
+          }
+        })();
+
+        toast.promise(transcribePromise, {
+          loading: 'Processing speech with Groq Whisper AI...',
+          success: 'Speech recognized successfully!',
+          error: (err) => err.message || 'Failed to recognize speech.'
+        });
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Universal voice recording failed:', err);
+      setIsRecording(false);
+      toast.error('Could not access microphone. Please check browser permissions.');
+    }
+  };
+
   const handleMicClick = () => {
     // HTTPS warning toast for mobile devices
     if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
@@ -202,11 +269,21 @@ const TranslationBox = () => {
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    // If native speech recognition is not supported (like in Firefox, Brave, or Safari under insecure contexts),
+    // we use our highly robust, cross-browser Universal MediaRecorder + Groq Whisper AI solution!
     if (!SpeechRecognition) {
-      toast.error('Speech Recognition is not supported in this browser. Please try Chrome or Safari.');
+      if (isRecording) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } else {
+        startUniversalRecording();
+      }
       return;
     }
 
+    // Otherwise, use native SpeechRecognition with low-latency interimResults
     if (isRecording) {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -217,7 +294,7 @@ const TranslationBox = () => {
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     recognition.continuous = false;
-    recognition.interimResults = true; // Enabled interim results for instant updates!
+    recognition.interimResults = true;
     
     const locale = LANGUAGE_LOCALES[sourceLanguage] || 'en-US';
     recognition.lang = locale;
