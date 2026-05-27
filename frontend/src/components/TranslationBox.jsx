@@ -34,6 +34,7 @@ const TranslationBox = () => {
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const speechUtteranceRef = useRef(null);
+  const audioRef = useRef(null);
 
   // Speech-to-Text State
   const [isRecording, setIsRecording] = useState(false);
@@ -61,6 +62,10 @@ const TranslationBox = () => {
   useEffect(() => {
     // Cleanup synthesis and recognition on unmount
     return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
@@ -77,8 +82,14 @@ const TranslationBox = () => {
 
   useEffect(() => {
     // Cancel speaking if translated text changes or is cleared
-    if (window.speechSynthesis && !translatedText) {
-      window.speechSynthesis.cancel();
+    if (!translatedText) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       setIsSpeaking(false);
     }
   }, [translatedText]);
@@ -91,13 +102,16 @@ const TranslationBox = () => {
   }, [error, dispatch]);
 
   const handleSpeak = () => {
-    if (!window.speechSynthesis) {
-      toast.error('Text-to-Speech is not supported in this browser.');
-      return;
+    // Cancel any active speech first
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
 
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
     }
@@ -105,33 +119,88 @@ const TranslationBox = () => {
     const textToSpeak = translatedText.trim();
     if (!textToSpeak) return;
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    speechUtteranceRef.current = utterance;
-
     const locale = LANGUAGE_LOCALES[targetLanguage] || 'en-US';
-    const voices = window.speechSynthesis.getVoices();
-    
-    // Find matching voice or language prefix
-    let voice = voices.find(v => v.lang.toLowerCase() === locale.toLowerCase() || v.lang.toLowerCase().startsWith(locale.toLowerCase().split('-')[0]));
-    
-    if (voice) {
-      utterance.voice = voice;
+
+    // Try to load voices
+    const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    const hasNativeVoice = voices.some(v => 
+      v.lang.toLowerCase() === locale.toLowerCase() || 
+      v.lang.toLowerCase().startsWith(locale.toLowerCase().split('-')[0])
+    );
+
+    // Sinhala lacks built-in high quality voices on most browsers (Chrome Android, Safari iOS, etc.).
+    // Google TTS fallback provides a beautiful natural voice.
+    if (targetLanguage === 'Sinhala' || !hasNativeVoice || !window.speechSynthesis) {
+      console.log('[TTS] Using high-quality Google TTS audio fallback for:', targetLanguage);
+      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${locale}&client=tw-ob&q=${encodeURIComponent(textToSpeak)}`;
+      const audio = new Audio(ttsUrl);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        setIsSpeaking(false);
+        audioRef.current = null;
+      };
+
+      audio.onerror = (e) => {
+        console.error('[TTS] Google TTS fallback failed:', e);
+        setIsSpeaking(false);
+        audioRef.current = null;
+        toast.error('Voice play failed in this browser.');
+      };
+
+      setIsSpeaking(true);
+      audio.play().catch(err => {
+        console.error('[TTS] Audio play blocked:', err);
+        setIsSpeaking(false);
+        toast.error('Audio play blocked. Tap again to play.');
+      });
+    } else {
+      // Use robust native speech synthesis
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      speechUtteranceRef.current = utterance;
+
+      let voice = voices.find(v => 
+        v.lang.toLowerCase() === locale.toLowerCase() || 
+        v.lang.toLowerCase().startsWith(locale.toLowerCase().split('-')[0])
+      );
+      
+      if (voice) {
+        utterance.voice = voice;
+      }
+      utterance.lang = locale;
+
+      utterance.onend = () => {
+        setIsSpeaking(false);
+      };
+
+      utterance.onerror = (e) => {
+        console.error('[TTS] Native speech error, falling back to Google TTS:', e);
+        // Fallback to Google TTS if native error occurs
+        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${locale}&client=tw-ob&q=${encodeURIComponent(textToSpeak)}`;
+        const audio = new Audio(ttsUrl);
+        audioRef.current = audio;
+        audio.onended = () => {
+          setIsSpeaking(false);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          audioRef.current = null;
+        };
+        audio.play().catch(() => setIsSpeaking(false));
+      };
+
+      setIsSpeaking(true);
+      window.speechSynthesis.speak(utterance);
     }
-    utterance.lang = locale;
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-    };
-
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-    };
-
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
   };
 
   const handleMicClick = () => {
+    // HTTPS warning toast for mobile devices
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      toast.error('Voice features require an HTTPS secure connection on mobile browsers.');
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast.error('Speech Recognition is not supported in this browser. Please try Chrome or Safari.');
@@ -148,7 +217,7 @@ const TranslationBox = () => {
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = true; // Enabled interim results for instant updates!
     
     const locale = LANGUAGE_LOCALES[sourceLanguage] || 'en-US';
     recognition.lang = locale;
@@ -158,9 +227,14 @@ const TranslationBox = () => {
     };
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      if (transcript) {
-        setLocalInputText(prev => prev ? `${prev} ${transcript}` : transcript);
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        setLocalInputText(prev => prev ? `${prev.trim()} ${finalTranscript.trim()}` : finalTranscript.trim());
       }
     };
 
@@ -191,10 +265,14 @@ const TranslationBox = () => {
   const handleClear = () => {
     setLocalInputText('');
     dispatch(setInputText(''));
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
-      setIsSpeaking(false);
     }
+    setIsSpeaking(false);
   };
 
   const currentIsFavorite = favorites && favorites.some(
