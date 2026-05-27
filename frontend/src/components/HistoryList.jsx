@@ -47,7 +47,7 @@ const HistoryList = () => {
                 dispatch(loadTranslation(item));
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/50 dark:border-white/5 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer"
+              className="bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer"
             >
               <button
                 onClick={(e) => {
