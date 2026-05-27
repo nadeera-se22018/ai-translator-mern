@@ -119,4 +119,67 @@ router.post('/', optionalAuth, async (req, res) => {
   }
 });
 
+// @desc    Transcribe speech to text using Groq Whisper (Universal Cross-Browser Fallback)
+// @route   POST /api/translate/transcribe
+router.post('/transcribe', express.raw({ type: 'audio/*', limit: '10mb' }), async (req, res) => {
+  let tempFilePath = null;
+  const fs = require('fs');
+  const path = require('path');
+  
+  try {
+    const audioBuffer = req.body;
+    if (!audioBuffer || audioBuffer.length === 0) {
+      return res.status(400).json({ error: 'No audio data received.' });
+    }
+
+    const sourceLang = req.headers['x-source-language'] || 'English';
+
+    // Map language names to ISO codes for Whisper hint
+    const languageCodes = {
+      'English': 'en', 'Sinhala': 'si', 'Spanish': 'es', 'French': 'fr', 'German': 'de', 
+      'Italian': 'it', 'Portuguese': 'pt', 'Russian': 'ru', 'Japanese': 'ja', 'Korean': 'ko', 
+      'Chinese (Simplified)': 'zh', 'Arabic': 'ar', 'Hindi': 'hi'
+    };
+    const langCode = languageCodes[sourceLang] || 'en';
+
+    // Save buffer to a temporary file
+    tempFilePath = path.join(__dirname, `../temp_speech_${Date.now()}.webm`);
+    fs.writeFileSync(tempFilePath, audioBuffer);
+
+    // Initialize Groq client
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+    // Transcribe using whisper-large-v3
+    const transcription = await groq.audio.transcriptions.create({
+      file: fs.createReadStream(tempFilePath),
+      model: 'whisper-large-v3',
+      language: langCode,
+      response_format: 'json'
+    });
+
+    // Delete temporary file
+    if (fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+      tempFilePath = null;
+    }
+
+    res.json({
+      success: true,
+      text: transcription.text
+    });
+
+  } catch (error) {
+    console.error('Transcription API Error:', error);
+    // Cleanup on error
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (err) {
+        console.error('Failed to delete temp file:', err);
+      }
+    }
+    res.status(500).json({ error: 'Failed to transcribe audio: ' + error.message });
+  }
+});
+
 module.exports = router;
