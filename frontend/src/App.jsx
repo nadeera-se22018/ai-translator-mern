@@ -31,22 +31,13 @@ function App() {
     <div className={`min-h-screen bg-slate-50 dark:bg-[#090b10] ${fontFamily} text-slate-900 dark:text-slate-100 flex flex-col relative overflow-x-hidden transition-colors duration-500`}>
       <Toaster position="top-center" reverseOrder={false} />
       
-      {/* Stunning Mixed Color Wallpapers / Gradients */}
+      {/* Stunning Mixed Color Wallpapers / Gradients - Highly Optimized Nested Radial Gradients (No Blur Filters) */}
       {theme === 'dark' ? (
-        <>
-          {/* Dark Mode Cosmic Background - GPU Accelerated */}
-          <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-[#090b10] to-[#090b10] pointer-events-none transform-gpu"></div>
-          <div className="fixed top-0 left-0 w-[500px] h-[500px] sm:w-[800px] sm:h-[800px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2 transform-gpu"></div>
-          <div className="fixed bottom-0 right-0 w-[600px] h-[600px] sm:w-[900px] sm:h-[900px] bg-purple-600/5 rounded-full blur-[150px] pointer-events-none translate-x-1/3 translate-y-1/3 transform-gpu"></div>
-          <div className="fixed top-1/2 left-1/2 w-[300px] h-[300px] bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 transform-gpu"></div>
-        </>
+        /* Dark Mode Cosmic Background - 100% GPU Accelerated Multi-Radial Gradient Layer */
+        <div className="fixed inset-0 bg-[#090b10] bg-[radial-gradient(circle_at_0%_0%,rgba(37,99,235,0.04)_0%,transparent_50%),radial-gradient(circle_at_100%_100%,rgba(147,51,234,0.04)_0%,transparent_60%),radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.03)_0%,transparent_30%),radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.12)_0%,#090b10_80%)] pointer-events-none transform-gpu will-change-[transform]"></div>
       ) : (
-        <>
-          {/* Light Mode - Clean, High-Contrast Workspace - GPU Accelerated */}
-          <div className="fixed inset-0 bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] pointer-events-none transform-gpu"></div>
-          {/* Single clean subtle blue glow for a highly modern tech aesthetic */}
-          <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none transform-gpu"></div>
-        </>
+        /* Light Mode Workspace - Clean, High-Contrast Multi-Radial Gradient Layer */
+        <div className="fixed inset-0 bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.05)_0%,transparent_50%)] pointer-events-none transform-gpu will-change-[transform]"></div>
       )}
       
       <div className="relative z-10 flex flex-col min-h-screen">
