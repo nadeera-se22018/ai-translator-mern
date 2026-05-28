@@ -7,7 +7,7 @@ import {
   swapLanguages,
   translateText,
   clearError,
-  toggleFavorite,
+  toggleFavoriteDb,
   setTranslationMode,
   setTranslatedText
 } from '../features/translation/translationSlice';
@@ -396,7 +396,11 @@ const TranslationBox = () => {
 
   const handleFavorite = () => {
     if (localInputText && translatedText) {
-      dispatch(toggleFavorite({ inputText: localInputText, translatedText, sourceLanguage, targetLanguage }));
+      const currentTranslationItem = history.find(
+        (h) => h.inputText === localInputText && h.translatedText === translatedText
+      ) || { inputText: localInputText, translatedText, sourceLanguage, targetLanguage, mode: translationMode };
+      
+      dispatch(toggleFavoriteDb(currentTranslationItem));
     }
   };
 
