@@ -1,11 +1,13 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-translator-backend-six.vercel.app';
+
 // Register User
 export const registerUser = createAsyncThunk(
   'auth/register',
   async (userData, thunkAPI) => {
     try {
-      const response = await fetch('https://ai-translator-backend-six.vercel.app/api/auth/register', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -32,7 +34,7 @@ export const loginUser = createAsyncThunk(
   'auth/login',
   async (userData, thunkAPI) => {
     try {
-      const response = await fetch('https://ai-translator-backend-six.vercel.app/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
