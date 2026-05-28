@@ -50,8 +50,29 @@ function App() {
           </div>
         </main>
 
-        <footer className="py-6 text-center text-xs sm:text-sm font-medium text-slate-500/80 mt-auto">
-          <p>&copy; {new Date().getFullYear()} LkTranslaterAI. Modern Edition.</p>
+        <footer className="py-8 w-full mt-auto border-t border-slate-200/40 dark:border-white/5 bg-slate-50/50 dark:bg-[#090b10]/50 backdrop-blur-md">
+          <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-12 xl:px-24 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs sm:text-sm font-medium text-slate-500/80 dark:text-slate-400/80">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+              <p>&copy; {new Date().getFullYear()} LkTranslaterAI. Modern Edition.</p>
+            </div>
+            
+            <div className="flex items-center gap-1.5">
+              <span>Designed & Developed by</span>
+              <a 
+                href="https://kasun-nadeera.vercel.app/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 relative group text-slate-800 dark:text-slate-200 font-bold hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-300 cursor-pointer"
+              >
+                Kasun Nadeera
+                <svg className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-600 group-hover:w-full transition-all duration-300 rounded-full"></span>
+              </a>
+            </div>
+          </div>
         </footer>
       </div>
 
