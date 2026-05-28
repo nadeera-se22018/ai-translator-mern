@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { logout } from '../auth/authSlice';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-translator-backend-six.vercel.app';
+
 // Async thunk for the translation API call
 export const translateText = createAsyncThunk(
   'translation/translateText',
@@ -16,7 +18,7 @@ export const translateText = createAsyncThunk(
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch('https://ai-translator-backend-six.vercel.app/api/translate', {
+      const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ inputText, sourceLanguage, targetLanguage, mode }),
@@ -44,7 +46,7 @@ export const fetchHistory = createAsyncThunk(
 
       if (!token) return thunkAPI.rejectWithValue('No token');
 
-      const response = await fetch('https://ai-translator-backend-six.vercel.app/api/translate/history', {
+      const response = await fetch(`${API_BASE_URL}/api/translate/history`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -62,6 +64,39 @@ export const fetchHistory = createAsyncThunk(
   }
 );
 
+export const toggleFavoriteDb = createAsyncThunk(
+  'translation/toggleFavoriteDb',
+  async (item, thunkAPI) => {
+    try {
+      const state = thunkAPI.getState();
+      const token = state.auth.user ? state.auth.user.token : null;
+
+      // If user is logged in and translation has an _id, sync with backend database
+      if (token && item._id) {
+        const response = await fetch(`${API_BASE_URL}/api/translate/history/${item._id}/favorite`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          return thunkAPI.rejectWithValue('Failed to toggle favorite on database');
+        }
+
+        const updatedItem = await response.json();
+        return { item, updatedItem, loggedIn: true };
+      }
+
+      // Guest flow: locally toggled
+      return { item, loggedIn: false };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(error.message || 'Network error occurred');
+    }
+  }
+);
+
 const initialState = {
   inputText: '',
   translatedText: '',
@@ -71,7 +106,7 @@ const initialState = {
   isLoading: false,
   error: null,
   history: [],
-  favorites: [],
+  favorites: JSON.parse(localStorage.getItem('lk_favorites') || '[]'),
   historyTab: 'history', // 'history' or 'favorites'
   cachedTranslations: { normal: '', gemini: '', groq: '' } // Caches translations for current inputText
 };
@@ -120,16 +155,6 @@ const translationSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    toggleFavorite: (state, action) => {
-      const existingIndex = state.favorites.findIndex(
-        (fav) => fav.inputText === action.payload.inputText && fav.translatedText === action.payload.translatedText
-      );
-      if (existingIndex >= 0) {
-        state.favorites.splice(existingIndex, 1);
-      } else {
-        state.favorites.unshift(action.payload);
-      }
-    },
     setHistoryTab: (state, action) => {
       state.historyTab = action.payload;
     },
@@ -170,9 +195,40 @@ const translationSlice = createSlice({
       })
       .addCase(fetchHistory.fulfilled, (state, action) => {
         state.history = action.payload;
+        state.favorites = action.payload.filter(item => item.isFavorite);
+      })
+      .addCase(toggleFavoriteDb.fulfilled, (state, action) => {
+        const { item, updatedItem, loggedIn } = action.payload;
+        if (loggedIn) {
+          // Update the item in the history array
+          const histIndex = state.history.findIndex(h => h._id === updatedItem._id);
+          if (histIndex >= 0) {
+            state.history[histIndex] = updatedItem;
+          }
+          // Update the favorites array
+          const favIndex = state.favorites.findIndex(f => f._id === updatedItem._id);
+          if (favIndex >= 0) {
+            state.favorites.splice(favIndex, 1);
+          } else {
+            state.favorites.unshift(updatedItem);
+          }
+        } else {
+          // Guest mode: handle locally using inputs/translated text match
+          const existingIndex = state.favorites.findIndex(
+            (fav) => fav.inputText === item.inputText && fav.translatedText === item.translatedText
+          );
+          if (existingIndex >= 0) {
+            state.favorites.splice(existingIndex, 1);
+          } else {
+            state.favorites.unshift(item);
+          }
+          localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+        }
       })
       .addCase(logout, (state) => {
         state.history = [];
+        state.favorites = [];
+        localStorage.removeItem('lk_favorites');
       });
   },
 });
@@ -186,7 +242,6 @@ export const {
   setTargetLanguage, 
   swapLanguages,
   clearError,
-  toggleFavorite,
   setHistoryTab,
   loadTranslation
 } = translationSlice.actions;
