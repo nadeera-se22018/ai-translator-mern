@@ -27,6 +27,10 @@ const translationSchema = new mongoose.Schema({
     required: false,
     default: 'groq',
   },
+  isFavorite: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
