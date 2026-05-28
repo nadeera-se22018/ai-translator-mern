@@ -182,4 +182,21 @@ router.post('/transcribe', express.raw({ type: 'audio/*', limit: '10mb' }), asyn
   }
 });
 
+// @desc    Toggle favorite status of a translation
+// @route   PATCH /api/translate/history/:id/favorite
+router.patch('/history/:id/favorite', protect, async (req, res) => {
+  try {
+    const translation = await Translation.findOne({ _id: req.params.id, user: req.user._id });
+    if (!translation) {
+      return res.status(404).json({ error: 'Translation not found' });
+    }
+    translation.isFavorite = !translation.isFavorite;
+    await translation.save();
+    res.json(translation);
+  } catch (error) {
+    console.error('Favorite Toggle Error:', error);
+    res.status(500).json({ error: 'Server Error' });
+  }
+});
+
 module.exports = router;
