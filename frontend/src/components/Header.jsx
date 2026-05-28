@@ -8,6 +8,8 @@ import { useAuth } from '../hooks/useAuth';
 
 import { setHistoryTab } from '../features/translation/translationSlice';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-translator-backend-six.vercel.app';
+
 const HeaderAvatar = ({ user, onLogout }) => {
   const [imgError, setImgError] = React.useState(false);
 
@@ -72,7 +74,7 @@ const Header = () => {
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      const res = await fetch('https://ai-translator-backend-six.vercel.app/api/auth/google', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
