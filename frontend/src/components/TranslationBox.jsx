@@ -318,7 +318,11 @@ const TranslationBox = () => {
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       setIsRecording(false);
-      if (event.error !== 'no-speech') {
+      if (event.error === 'not-allowed') {
+        toast.error('Microphone permission denied. Please allow microphone access in your browser settings.');
+      } else if (event.error === 'service-not-allowed') {
+        toast.error('Speech recognition service is not allowed or not supported on this browser.');
+      } else if (event.error !== 'no-speech') {
         toast.error(`Speech recognition failed: ${event.error}`);
       }
     };
