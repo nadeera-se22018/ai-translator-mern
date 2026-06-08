@@ -15,6 +15,8 @@ import LanguageSelector from './LanguageSelector';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-translator-backend-six.vercel.app';
+
 const TranslationBox = () => {
   const dispatch = useDispatch();
   const { 
@@ -44,6 +46,13 @@ const TranslationBox = () => {
 
   // Performance Optimization: Local state for typing at 60fps
   const [localInputText, setLocalInputText] = useState(inputText);
+
+  // Autocomplete Suggestions State
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+  const suggestionsRef = useRef(null);
+  const ignoreSuggestionsRef = useRef(false);
 
   const LANGUAGE_LOCALES = {
     'English': 'en-US',
@@ -85,9 +94,61 @@ const TranslationBox = () => {
     setLocalInputText(inputText);
   }, [inputText]);
 
+  // Handle click outside suggestions dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch suggestions debounced when typing in English
+  useEffect(() => {
+    if (ignoreSuggestionsRef.current) {
+      ignoreSuggestionsRef.current = false;
+      return;
+    }
+
+    if (sourceLanguage !== 'English') {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const trimmed = localInputText.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSuggestionsLoading(true);
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/translate/suggestions?q=${encodeURIComponent(trimmed)}&sourceLanguage=${sourceLanguage}&targetLanguage=${targetLanguage}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setSuggestions(data);
+          setShowSuggestions(data.length > 0);
+        }
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+      } finally {
+        setIsSuggestionsLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [localInputText, sourceLanguage, targetLanguage]);
+
   useEffect(() => {
     // Cancel speaking if translated text changes or is cleared
-    if (!translatedText) {
+    if (!translatedText || (typeof translatedText === 'object' && !translatedText.best)) {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -121,7 +182,7 @@ const TranslationBox = () => {
       return;
     }
 
-    const textToSpeak = translatedText.trim();
+    const textToSpeak = typeof translatedText === 'object' && translatedText !== null ? (translatedText.best || '').trim() : (translatedText || '').trim();
     if (!textToSpeak) return;
 
     const locale = LANGUAGE_LOCALES[targetLanguage] || 'en-US';
@@ -223,7 +284,7 @@ const TranslationBox = () => {
 
         // Create a custom toast promise for elegant status tracking
         const transcribePromise = (async () => {
-          const response = await fetch('/api/translate/transcribe', {
+          const response = await fetch(`${API_BASE_URL}/api/translate/transcribe`, {
             method: 'POST',
             headers: {
               'Content-Type': 'audio/webm',
@@ -335,8 +396,9 @@ const TranslationBox = () => {
   };
 
   const handleCopy = () => {
-    if (translatedText) {
-      navigator.clipboard.writeText(translatedText);
+    const textToCopy = typeof translatedText === 'object' && translatedText !== null ? translatedText.best : translatedText;
+    if (textToCopy) {
+      navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       toast.success('Text copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
@@ -346,6 +408,8 @@ const TranslationBox = () => {
   const handleClear = () => {
     setLocalInputText('');
     dispatch(setInputText(''));
+    setSuggestions([]);
+    setShowSuggestions(false);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
@@ -357,8 +421,29 @@ const TranslationBox = () => {
   };
 
   const currentIsFavorite = favorites && favorites.some(
-    (fav) => fav.inputText === localInputText && fav.translatedText === translatedText
+    (fav) => {
+      const favText = typeof fav.translatedText === 'object' && fav.translatedText !== null ? fav.translatedText.best : fav.translatedText;
+      const currentText = typeof translatedText === 'object' && translatedText !== null ? translatedText.best : translatedText;
+      return fav.inputText === localInputText && favText === currentText;
+    }
   );
+
+  const handleSuggestionClick = (phrase) => {
+    ignoreSuggestionsRef.current = true;
+    setLocalInputText(phrase);
+    setSuggestions([]);
+    setShowSuggestions(false);
+
+    dispatch(setInputText(phrase));
+
+    console.log(`[TranslationBox] Suggestion clicked: "${phrase}". Running translation...`);
+    dispatch(translateText({ 
+      inputText: phrase, 
+      sourceLanguage, 
+      targetLanguage, 
+      mode: translationMode 
+    }));
+  };
 
   const handleInputChange = (e) => {
     setLocalInputText(e.target.value);
@@ -399,10 +484,20 @@ const TranslationBox = () => {
   };
 
   const handleFavorite = () => {
-    if (localInputText && translatedText) {
+    const currentText = typeof translatedText === 'object' && translatedText !== null ? translatedText.best : translatedText;
+    if (localInputText && currentText) {
       const currentTranslationItem = history.find(
-        (h) => h.inputText === localInputText && h.translatedText === translatedText
-      ) || { inputText: localInputText, translatedText, sourceLanguage, targetLanguage, mode: translationMode };
+        (h) => {
+          const hText = typeof h.translatedText === 'object' && h.translatedText !== null ? h.translatedText.best : h.translatedText;
+          return h.inputText === localInputText && hText === currentText;
+        }
+      ) || { 
+        inputText: localInputText, 
+        translatedText: typeof translatedText === 'object' && translatedText !== null ? JSON.stringify(translatedText) : translatedText, 
+        sourceLanguage, 
+        targetLanguage, 
+        mode: translationMode 
+      };
       
       dispatch(toggleFavoriteDb(currentTranslationItem));
     }
@@ -507,7 +602,39 @@ const TranslationBox = () => {
               value={localInputText}
               // RULE 2: No OnChange Fetching. Only updates local state, NEVER triggers API.
               onChange={handleInputChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowSuggestions(false);
+                }
+              }}
             />
+            {showSuggestions && suggestions.length > 0 && (
+              <motion.div 
+                ref={suggestionsRef}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="absolute left-4 right-4 top-16 bg-white dark:bg-[#1a1d27] border border-slate-200 dark:border-slate-800/80 rounded-xl shadow-xl z-50 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/50"
+              >
+                {suggestions.map((item, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(item.phrase)}
+                    className="w-full text-left p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors flex flex-col gap-0.5 cursor-pointer outline-none focus:bg-slate-50 dark:focus:bg-slate-800/30"
+                  >
+                    <span className="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-100">
+                      {item.phrase}
+                    </span>
+                    {item.translated && (
+                      <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal">
+                        {item.translated}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </motion.div>
+            )}
             <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-1.5 sm:gap-2">
               {/* Microphone / Speech-to-Text Button */}
               <motion.button
@@ -556,7 +683,7 @@ const TranslationBox = () => {
               onChange={(lang) => dispatch(setTargetLanguage(lang))}
               label="Target Language"
             />
-            {translatedText && (
+            {((translatedText?.best) || (typeof translatedText === 'string' && translatedText)) && (
               <div className="absolute right-4 sm:right-6 flex items-center gap-1 sm:gap-2">
                 {/* Speaker/Listen Button */}
                 <motion.button 
@@ -628,7 +755,7 @@ const TranslationBox = () => {
               </div>
             ) : (
               <div className={`w-full flex-1 overflow-y-auto font-medium transition-colors duration-200 leading-relaxed ${fontSize} ${fontColor.replace('text-slate-800', 'text-blue-900').replace('text-slate-100', 'text-blue-100')}`}>
-                {translatedText || (
+                {(typeof translatedText === 'object' && translatedText !== null ? translatedText.best : translatedText) || (
                   <span className="text-slate-400/50 dark:text-slate-500/40 italic text-lg sm:text-xl">Translation</span>
                 )}
               </div>
@@ -649,6 +776,45 @@ const TranslationBox = () => {
           </motion.button>
         </div>
       </div>
+
+      {/* Alternatives Section */}
+      {translatedText?.alternatives && translatedText.alternatives.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="mt-6 p-4 sm:p-5 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md rounded-2xl border border-slate-200/60 dark:border-slate-800/80 shadow-md"
+        >
+          <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 flex items-center gap-2">
+            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Alternative Translations
+          </h4>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {translatedText.alternatives.map((alt, idx) => (
+              <div
+                key={idx}
+                onClick={() => {
+                  navigator.clipboard.writeText(alt);
+                  toast.success('Alternative copied!');
+                }}
+                className="flex-1 bg-slate-50/80 dark:bg-[#13151f]/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-800/80 p-3.5 rounded-xl cursor-pointer transition-all duration-200 flex items-center justify-between group active:scale-[0.98]"
+              >
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">
+                  {alt}
+                </span>
+                <span className="text-xs text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 font-bold">
+                  Copy
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Action Area - Centered on Page */}
       <div className="mt-4 sm:mt-6 flex justify-center gap-3 sm:gap-4 w-full md:w-auto">
