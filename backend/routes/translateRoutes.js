@@ -11,11 +11,101 @@ const { protect, optionalAuth } = require('../middleware/authMiddleware');
 router.get('/history', protect, async (req, res) => {
   try {
     const history = await Translation.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50);
-    res.json(history);
+    
+    // Parse translatedText JSON string back into an object before sending to frontend
+    const parsedHistory = history.map(item => {
+      const itemObj = item.toObject();
+      try {
+        itemObj.translatedText = JSON.parse(itemObj.translatedText);
+      } catch (e) {
+        // Fallback if it's not a JSON string (e.g. older legacy records)
+        itemObj.translatedText = {
+          best: itemObj.translatedText,
+          alternatives: []
+        };
+      }
+      return itemObj;
+    });
+
+    res.json(parsedHistory);
   } catch (error) {
     res.status(500).json({ error: 'Server Error' });
   }
 });
+
+// @desc    Get autocomplete suggestions with translation
+// @route   GET /api/translate/suggestions
+router.get('/suggestions', async (req, res) => {
+  try {
+    const { q, sourceLanguage = 'English', targetLanguage = 'Sinhala' } = req.query;
+    if (!q || !q.trim()) {
+      return res.json([]);
+    }
+
+    // Fetch autocomplete suggestions from Google (free, no token cost)
+    const autocompleteUrl = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(q.trim())}`;
+    const response = await fetch(autocompleteUrl);
+    if (!response.ok) {
+      throw new Error('Failed to fetch suggestions from Google');
+    }
+    const data = await response.json();
+    const suggestions = (data[1] || []).slice(0, 3);
+
+    const languageCodes = {
+      'English': 'en', 'Sinhala': 'si', 'Spanish': 'es', 'French': 'fr', 'German': 'de', 
+      'Italian': 'it', 'Portuguese': 'pt', 'Russian': 'ru', 'Japanese': 'ja', 'Korean': 'ko', 
+      'Chinese (Simplified)': 'zh-cn', 'Arabic': 'ar', 'Hindi': 'hi'
+    };
+    const fromCode = languageCodes[sourceLanguage] || 'en';
+    const toCode = languageCodes[targetLanguage] || 'si';
+
+    const results = await Promise.all(
+      suggestions.map(async (phrase) => {
+        try {
+          const translated = await translateGoogle(phrase, { from: fromCode, to: toCode });
+          return { phrase, translated };
+        } catch (error) {
+          console.error(`Error translating suggestion "${phrase}":`, error);
+          return { phrase, translated: '' };
+        }
+      })
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error('Suggestions Error:', error);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
+// Helper function to safely parse LLM JSON responses, cleaning up markdown code block markers
+function parseLLMJson(text) {
+  try {
+    let cleaned = text.trim();
+    // Strip markdown code block wrapper if present (e.g. ```json ... ``` or ``` ... ```)
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    }
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.warn('[parseLLMJson] Standard parsing failed, attempting regex extraction:', err);
+    try {
+      const startIdx = text.indexOf('{');
+      const endIdx = text.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        const jsonSub = text.substring(startIdx, endIdx + 1);
+        return JSON.parse(jsonSub);
+      }
+    } catch (regexErr) {
+      console.error('[parseLLMJson] Regex JSON extraction failed:', regexErr);
+    }
+    // Fallback if parsing fails entirely
+    return {
+      best: text,
+      alternatives: []
+    };
+  }
+}
 
 // @desc    Translate text and optionally save to user history
 // @route   POST /api/translate
@@ -27,7 +117,7 @@ router.post('/', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'inputText, sourceLanguage, and targetLanguage are required.' });
     }
 
-    let translatedText = '';
+    let parsedObject = { best: '', alternatives: [] };
 
     if (mode === 'normal') {
       const languageCodes = {
@@ -38,47 +128,106 @@ router.post('/', optionalAuth, async (req, res) => {
       const fromCode = languageCodes[sourceLanguage] || 'en';
       const toCode = languageCodes[targetLanguage] || 'si';
 
-      translatedText = await translateGoogle(inputText, { from: fromCode, to: toCode });
+      let myMemoryData;
+      try {
+        const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(inputText)}&langpair=${fromCode}|${toCode}`;
+        const response = await fetch(myMemoryUrl);
+        if (!response.ok) {
+          throw new Error(`MyMemory API returned status: ${response.status}`);
+        }
+        myMemoryData = await response.json();
+      } catch (err) {
+        console.error('MyMemory API failed, falling back to translate-google:', err);
+        // Fallback to translate-google if MyMemory fails
+        const fallbackTranslation = await translateGoogle(inputText, { from: fromCode, to: toCode });
+        myMemoryData = {
+          responseData: { translatedText: fallbackTranslation },
+          matches: [{ translation: fallbackTranslation }]
+        };
+      }
+
+      const bestTranslation = myMemoryData.responseData?.translatedText || '';
+      const alternativesList = (myMemoryData.matches || [])
+        .map(m => m.translation?.trim())
+        .filter(t => t && t.toLowerCase() !== bestTranslation.toLowerCase())
+        .filter((value, index, self) => self.indexOf(value) === index)
+        .slice(0, 2);
+
+      parsedObject = {
+        best: bestTranslation,
+        alternatives: alternativesList
+      };
+
     } else if (mode === 'gemini') {
       // Initialize Gemini client
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-      const systemPrompt = `You are an expert, professional translator. Your task is to accurately translate the provided text from ${sourceLanguage} to ${targetLanguage}. Maintain the original tone and context. Return ONLY the translated text without any conversational filler, markdown formatting, or additional explanations.`;
+      const systemPrompt = `You are an expert, professional translator. Your task is to accurately translate the provided text from ${sourceLanguage} to ${targetLanguage}. Maintain the original tone and context.
+You MUST provide the translation and exactly 2 alternative similar translations (including Singlish if applicable).
+You MUST return the output ONLY as a valid JSON object matching this schema:
+{
+  "best": "The most accurate translation string",
+  "alternatives": ["Alternative 1", "Alternative 2"]
+}
+Do NOT include any markdown formatting, code block markers (like \`\`\`json), or explanations. Return ONLY the raw JSON string.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: inputText,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: 0.3,
-        }
-      });
+      let responseText = '';
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: inputText,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: 0.3,
+            responseMimeType: 'application/json'
+          }
+        });
+        responseText = response.text.trim();
+        parsedObject = parseLLMJson(responseText);
+      } catch (err) {
+        console.error('Gemini translation failed:', err);
+        throw err;
+      }
 
-      translatedText = response.text.trim();
     } else {
       // Initialize Groq client (default AI mode or explicitly selected)
       const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-      const systemPrompt = `You are an expert, professional translator. Your task is to accurately translate the provided text from ${sourceLanguage} to ${targetLanguage}. Maintain the original tone and context. Return ONLY the translated text without any conversational filler, markdown formatting, or additional explanations.`;
+      const systemPrompt = `You are an expert, professional translator. Your task is to accurately translate the provided text from ${sourceLanguage} to ${targetLanguage}. Maintain the original tone and context.
+You MUST provide the translation and exactly 2 alternative similar translations (including Singlish if applicable).
+You MUST return the output ONLY as a valid JSON object matching this schema:
+{
+  "best": "The most accurate translation string",
+  "alternatives": ["Alternative 1", "Alternative 2"]
+}
+Do NOT include any markdown formatting, code block markers (like \`\`\`json), or explanations. Return ONLY the raw JSON string.`;
 
-      const response = await groq.chat.completions.create({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: inputText }
-        ],
-        model: 'llama-3.3-70b-versatile',
-        temperature: 0.3,
-      });
-
-      translatedText = response.choices[0].message.content.trim();
+      let responseText = '';
+      try {
+        const response = await groq.chat.completions.create({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: inputText }
+          ],
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.3,
+          response_format: { type: "json_object" }
+        });
+        responseText = response.choices[0].message.content.trim();
+        parsedObject = parseLLMJson(responseText);
+      } catch (err) {
+        console.error('Groq translation failed:', err);
+        throw err;
+      }
     }
 
-    // Save to database
+    // Save to database as stringified JSON
     let savedTranslation = null;
+    const dbTranslatedText = JSON.stringify(parsedObject);
     try {
       const newTranslation = new Translation({
         inputText,
-        translatedText,
+        translatedText: dbTranslatedText,
         sourceLanguage,
         targetLanguage,
         mode,
@@ -89,20 +238,22 @@ router.post('/', optionalAuth, async (req, res) => {
       console.error("MongoDB save failed/timed out:", dbError.message);
     }
 
-    // Return the result
+    // Return the result with the parsed JSON object sent directly to the React frontend
     return res.status(201).json({
       success: true,
-      data: savedTranslation || {
+      data: {
+        _id: savedTranslation ? savedTranslation._id : undefined,
         inputText,
-        translatedText,
+        translatedText: parsedObject, // Send the parsed JSON object directly to the React frontend
         sourceLanguage,
         targetLanguage,
-        mode
+        mode,
+        createdAt: savedTranslation ? savedTranslation.createdAt : new Date()
       }
     });
 
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Translation Controller Error:", error);
     
     // Check if it's a rate limit error (429)
     let errorMessage = error.message || 'An error occurred during translation from AI API.';
