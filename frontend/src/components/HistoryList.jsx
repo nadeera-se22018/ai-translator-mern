@@ -31,7 +31,11 @@ const HistoryList = () => {
   const displayedList = viewAll ? currentList : currentList.slice(0, limit);
 
   const isFavorite = (item) => {
-    return favorites.some(fav => fav.inputText === item.inputText && fav.translatedText === item.translatedText);
+    return favorites.some(fav => {
+      const favText = typeof fav.translatedText === 'object' && fav.translatedText !== null ? fav.translatedText.best : fav.translatedText;
+      const itemText = typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText;
+      return fav.inputText === item.inputText && favText === itemText;
+    });
   };
 
   return (
@@ -106,7 +110,9 @@ const HistoryList = () => {
                     <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{item.inputText}</p>
                   </div>
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800/50">
-                    <p className="text-blue-600 dark:text-blue-400 font-semibold whitespace-pre-wrap">{item.translatedText}</p>
+                    <p className="text-blue-600 dark:text-blue-400 font-semibold whitespace-pre-wrap">
+                      {typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText}
+                    </p>
                   </div>
                 </div>
               </div>
