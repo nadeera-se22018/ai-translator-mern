@@ -99,7 +99,7 @@ export const toggleFavoriteDb = createAsyncThunk(
 
 const initialState = {
   inputText: '',
-  translatedText: '',
+  translatedText: { best: '', alternatives: [] },
   sourceLanguage: 'English',
   targetLanguage: 'Sinhala',
   translationMode: 'groq', // 'normal', 'gemini', or 'groq'
@@ -108,7 +108,11 @@ const initialState = {
   history: [],
   favorites: JSON.parse(localStorage.getItem('lk_favorites') || '[]'),
   historyTab: 'history', // 'history' or 'favorites'
-  cachedTranslations: { normal: '', gemini: '', groq: '' } // Caches translations for current inputText
+  cachedTranslations: { 
+    normal: { best: '', alternatives: [] }, 
+    gemini: { best: '', alternatives: [] }, 
+    groq: { best: '', alternatives: [] } 
+  } // Caches translations for current inputText
 };
 
 const translationSlice = createSlice({
@@ -118,8 +122,12 @@ const translationSlice = createSlice({
     setInputText: (state, action) => {
       // Stale cache protection: only clear cache if the input text has actually changed or is cleared
       if (action.payload === '' || action.payload !== state.inputText) {
-        state.translatedText = '';
-        state.cachedTranslations = { normal: '', gemini: '', groq: '' };
+        state.translatedText = { best: '', alternatives: [] };
+        state.cachedTranslations = { 
+          normal: { best: '', alternatives: [] }, 
+          gemini: { best: '', alternatives: [] }, 
+          groq: { best: '', alternatives: [] } 
+        };
       }
       state.inputText = action.payload;
       state.error = null;
@@ -127,14 +135,18 @@ const translationSlice = createSlice({
     setTranslationMode: (state, action) => {
       state.translationMode = action.payload;
       // Restore cached translation instantly when mode changes
-      state.translatedText = state.cachedTranslations[action.payload] || '';
+      state.translatedText = state.cachedTranslations[action.payload] || { best: '', alternatives: [] };
     },
     setTranslatedText: (state, action) => {
-      state.translatedText = action.payload;
+      state.translatedText = action.payload || { best: '', alternatives: [] };
     },
     clearTranslationCache: (state) => {
-      state.translatedText = '';
-      state.cachedTranslations = { normal: '', gemini: '', groq: '' };
+      state.translatedText = { best: '', alternatives: [] };
+      state.cachedTranslations = { 
+        normal: { best: '', alternatives: [] }, 
+        gemini: { best: '', alternatives: [] }, 
+        groq: { best: '', alternatives: [] } 
+      };
     },
     setSourceLanguage: (state, action) => {
       state.sourceLanguage = action.payload;
@@ -147,9 +159,9 @@ const translationSlice = createSlice({
       state.sourceLanguage = state.targetLanguage;
       state.targetLanguage = temp;
       
-      if (state.translatedText) {
-        state.inputText = state.translatedText;
-        state.translatedText = '';
+      if (state.translatedText && state.translatedText.best) {
+        state.inputText = state.translatedText.best;
+        state.translatedText = { best: '', alternatives: [] };
       }
     },
     clearError: (state) => {
@@ -161,14 +173,24 @@ const translationSlice = createSlice({
     loadTranslation: (state, action) => {
       const { inputText, translatedText, sourceLanguage, targetLanguage, mode } = action.payload;
       state.inputText = inputText;
-      state.translatedText = translatedText;
+      
+      let parsedTranslation = translatedText;
+      if (typeof translatedText === 'string') {
+        try {
+          parsedTranslation = JSON.parse(translatedText);
+        } catch (e) {
+          parsedTranslation = { best: translatedText, alternatives: [] };
+        }
+      }
+      
+      state.translatedText = parsedTranslation || { best: '', alternatives: [] };
       state.sourceLanguage = sourceLanguage;
       state.targetLanguage = targetLanguage;
       if (mode) {
         state.translationMode = mode;
       }
       // Populate cache for the selected mode
-      state.cachedTranslations[mode || state.translationMode] = translatedText;
+      state.cachedTranslations[mode || state.translationMode] = parsedTranslation || { best: '', alternatives: [] };
       state.error = null;
     }
   },
@@ -180,10 +202,23 @@ const translationSlice = createSlice({
       })
       .addCase(translateText.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.translatedText = action.payload.translatedText;
+        
+        let parsedTranslation = action.payload.translatedText;
+        if (typeof parsedTranslation === 'string') {
+          try {
+            parsedTranslation = JSON.parse(parsedTranslation);
+          } catch (e) {
+            parsedTranslation = { best: parsedTranslation, alternatives: [] };
+          }
+        }
+        
+        state.translatedText = parsedTranslation || { best: '', alternatives: [] };
         // Save the successful translation in our cache for the current mode
-        state.cachedTranslations[state.translationMode] = action.payload.translatedText;
-        state.history.unshift(action.payload);
+        state.cachedTranslations[state.translationMode] = parsedTranslation || { best: '', alternatives: [] };
+        
+        // Push full history item with parsed translation object
+        const historyItem = { ...action.payload, translatedText: parsedTranslation };
+        state.history.unshift(historyItem);
         if (state.history.length > 30) {
           state.history.pop();
         }
@@ -191,7 +226,7 @@ const translationSlice = createSlice({
       .addCase(translateText.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
-        state.translatedText = '';
+        state.translatedText = { best: '', alternatives: [] };
       })
       .addCase(fetchHistory.fulfilled, (state, action) => {
         state.history = action.payload;
@@ -200,23 +235,36 @@ const translationSlice = createSlice({
       .addCase(toggleFavoriteDb.fulfilled, (state, action) => {
         const { item, updatedItem, loggedIn } = action.payload;
         if (loggedIn) {
+          // Parse updatedItem translation back to object format
+          let parsedUpdatedItem = { ...updatedItem };
+          try {
+            if (typeof parsedUpdatedItem.translatedText === 'string') {
+              parsedUpdatedItem.translatedText = JSON.parse(parsedUpdatedItem.translatedText);
+            }
+          } catch (e) {
+            parsedUpdatedItem.translatedText = { best: parsedUpdatedItem.translatedText, alternatives: [] };
+          }
+          
           // Update the item in the history array
-          const histIndex = state.history.findIndex(h => h._id === updatedItem._id);
+          const histIndex = state.history.findIndex(h => h._id === parsedUpdatedItem._id);
           if (histIndex >= 0) {
-            state.history[histIndex] = updatedItem;
+            state.history[histIndex] = parsedUpdatedItem;
           }
           // Update the favorites array
-          const favIndex = state.favorites.findIndex(f => f._id === updatedItem._id);
+          const favIndex = state.favorites.findIndex(f => f._id === parsedUpdatedItem._id);
           if (favIndex >= 0) {
             state.favorites.splice(favIndex, 1);
           } else {
-            state.favorites.unshift(updatedItem);
+            state.favorites.unshift(parsedUpdatedItem);
           }
         } else {
           // Guest mode: handle locally using inputs/translated text match
-          const existingIndex = state.favorites.findIndex(
-            (fav) => fav.inputText === item.inputText && fav.translatedText === item.translatedText
-          );
+          const existingIndex = state.favorites.findIndex((fav) => {
+            const favText = typeof fav.translatedText === 'object' && fav.translatedText !== null ? fav.translatedText.best : fav.translatedText;
+            const itemText = typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText;
+            return fav.inputText === item.inputText && favText === itemText;
+          });
+          
           if (existingIndex >= 0) {
             state.favorites.splice(existingIndex, 1);
           } else {
