@@ -597,7 +597,7 @@ const TranslationBox = () => {
           {/* Input Area */}
           <div className="relative flex-1 p-4 sm:p-6 flex flex-col">
             <textarea
-              className={`w-full flex-1 resize-none bg-transparent outline-none font-medium placeholder-slate-400/70 transition-colors duration-200 leading-relaxed ${fontSize} ${fontColor}`}
+              className={`w-full flex-1 resize-none bg-transparent outline-none font-medium placeholder-slate-400/70 transition-colors duration-200 leading-relaxed pr-16 sm:pr-24 ${fontSize} ${fontColor}`}
               placeholder="Translate..."
               value={localInputText}
               // RULE 2: No OnChange Fetching. Only updates local state, NEVER triggers API.
