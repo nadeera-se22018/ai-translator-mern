@@ -158,6 +158,63 @@ router.post('/', optionalAuth, async (req, res) => {
         alternatives: alternativesList
       };
 
+    } else if (mode === 'microsoft') {
+      const languageCodes = {
+        'English': 'en', 'Sinhala': 'si', 'Spanish': 'es', 'French': 'fr', 'German': 'de', 
+        'Italian': 'it', 'Portuguese': 'pt', 'Russian': 'ru', 'Japanese': 'ja', 'Korean': 'ko', 
+        'Chinese (Simplified)': 'zh-Hans', 'Arabic': 'ar', 'Hindi': 'hi'
+      };
+      const fromCode = languageCodes[sourceLanguage] || 'en';
+      const toCode = languageCodes[targetLanguage] || 'si';
+
+      const key = process.env.MS_TRANSLATOR_KEY;
+      const region = process.env.MS_TRANSLATOR_REGION || 'southeastasia';
+
+      if (!key) {
+        throw new Error('Microsoft Translator Key is not configured on the server.');
+      }
+
+      const msUrl = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=${fromCode}&to=${toCode}`;
+      const response = await fetch(msUrl, {
+        method: 'POST',
+        headers: {
+          'Ocp-Apim-Subscription-Key': key,
+          'Ocp-Apim-Subscription-Region': region,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify([{ text: inputText }])
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Microsoft Translator API failed: ${response.status} - ${errText}`);
+      }
+
+      const data = await response.json();
+      const bestTranslation = data[0]?.translations[0]?.text || '';
+
+      // Fetch alternative translations using MyMemory API
+      let alternativesList = [];
+      try {
+        const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(inputText)}&langpair=${fromCode === 'zh-Hans' ? 'zh-CN' : fromCode}|${toCode === 'zh-Hans' ? 'zh-CN' : toCode}`;
+        const alternativesResponse = await fetch(myMemoryUrl);
+        if (alternativesResponse.ok) {
+          const myMemoryData = await alternativesResponse.json();
+          alternativesList = (myMemoryData.matches || [])
+            .map(m => m.translation?.trim())
+            .filter(t => t && t.toLowerCase() !== bestTranslation.toLowerCase())
+            .filter((value, index, self) => self.indexOf(value) === index)
+            .slice(0, 2);
+        }
+      } catch (err) {
+        console.error('Failed to fetch alternatives from MyMemory for Microsoft mode:', err);
+      }
+
+      parsedObject = {
+        best: bestTranslation,
+        alternatives: alternativesList
+      };
+
     } else if (mode === 'gemini') {
       // Initialize Gemini client
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
