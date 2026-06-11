@@ -95,12 +95,14 @@ const HistoryList = () => {
                     <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider 
                       ${item.mode === 'normal' 
                         ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/30 dark:border-blue-800/30' 
+                        : item.mode === 'microsoft'
+                        ? 'bg-teal-100 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 border border-teal-200/30 dark:border-teal-800/30'
                         : item.mode === 'gemini'
                         ? 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/30 dark:border-indigo-800/30'
                         : 'bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200/30 dark:border-orange-800/30'
                       }`}
                     >
-                      {item.mode === 'normal' ? 'Normal' : item.mode === 'gemini' ? 'AI Gemini' : 'AI Groq'}
+                      {item.mode === 'normal' ? 'Normal' : item.mode === 'microsoft' ? 'Microsoft' : item.mode === 'gemini' ? 'AI Gemini' : 'AI Groq'}
                     </span>
                   )}
                 </div>
