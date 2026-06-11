@@ -529,6 +529,21 @@ const TranslationBox = () => {
           
           <motion.button
             whileTap={{ scale: 0.95 }}
+            onClick={() => dispatch(setTranslationMode('microsoft'))}
+            className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-[color,background-color,border-color,box-shadow,transform] duration-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
+              translationMode === 'microsoft' 
+                ? 'bg-gradient-to-r from-teal-500 to-cyan-600 text-white shadow-md transform scale-100' 
+                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 scale-95 hover:scale-100'
+            }`}
+          >
+            <svg className="hidden sm:block w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+            Microsoft
+          </motion.button>
+          
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => dispatch(setTranslationMode('gemini'))}
             className={`px-2.5 sm:px-5 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base transition-[color,background-color,border-color,box-shadow,transform] duration-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
               translationMode === 'gemini' 
