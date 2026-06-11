@@ -102,7 +102,7 @@ const initialState = {
   translatedText: { best: '', alternatives: [] },
   sourceLanguage: 'English',
   targetLanguage: 'Sinhala',
-  translationMode: 'groq', // 'normal', 'gemini', or 'groq'
+  translationMode: 'gemini', // 'normal', 'microsoft', 'gemini', or 'groq'
   isLoading: false,
   error: null,
   history: [],
@@ -110,6 +110,7 @@ const initialState = {
   historyTab: 'history', // 'history' or 'favorites'
   cachedTranslations: { 
     normal: { best: '', alternatives: [] }, 
+    microsoft: { best: '', alternatives: [] }, 
     gemini: { best: '', alternatives: [] }, 
     groq: { best: '', alternatives: [] } 
   } // Caches translations for current inputText
@@ -125,6 +126,7 @@ const translationSlice = createSlice({
         state.translatedText = { best: '', alternatives: [] };
         state.cachedTranslations = { 
           normal: { best: '', alternatives: [] }, 
+          microsoft: { best: '', alternatives: [] }, 
           gemini: { best: '', alternatives: [] }, 
           groq: { best: '', alternatives: [] } 
         };
@@ -144,6 +146,7 @@ const translationSlice = createSlice({
       state.translatedText = { best: '', alternatives: [] };
       state.cachedTranslations = { 
         normal: { best: '', alternatives: [] }, 
+        microsoft: { best: '', alternatives: [] }, 
         gemini: { best: '', alternatives: [] }, 
         groq: { best: '', alternatives: [] } 
       };
