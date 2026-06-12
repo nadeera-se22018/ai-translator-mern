@@ -390,6 +390,67 @@ router.post('/transcribe', express.raw({ type: 'audio/*', limit: '10mb' }), asyn
   }
 });
 
+// @desc    Check English spelling and get correction suggestions
+// @route   POST /api/translate/spellcheck
+router.post('/spellcheck', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) {
+      return res.json({ errors: [] });
+    }
+
+    const systemPrompt = `You are a precise English spell checker. Identify misspelled words in the text. For each misspelled word, suggest 1 to 3 corrections. Ignore proper nouns (like names, places), abbreviations, or tech terms unless they are clearly typos of common words.
+Return ONLY a JSON object matching this schema:
+{
+  "errors": [
+    { "word": "spellling", "suggestions": ["spelling", "spelled"] }
+  ]
+}
+If there are no misspelled words, return {"errors": []}. Do NOT return markdown block formatting, code block markers, or explanations.`;
+
+    let parsed;
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: text,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const responseText = response.text.trim();
+      parsed = parseLLMJson(responseText);
+    } catch (geminiError) {
+      console.warn('Gemini spellcheck failed, trying Groq fallback:', geminiError.message || geminiError);
+      if (process.env.GROQ_API_KEY) {
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+        const response = await groq.chat.completions.create({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: text }
+          ],
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        });
+        const responseText = response.choices[0].message.content.trim();
+        parsed = parseLLMJson(responseText);
+      } else {
+        throw geminiError;
+      }
+    }
+
+    res.json(parsed);
+  } catch (error) {
+    console.error('Spellcheck Error:', error);
+    res.status(500).json({ error: 'Spellcheck failed' });
+  }
+});
+
+
 // @desc    Toggle favorite status of a translation
 // @route   PATCH /api/translate/history/:id/favorite
 router.patch('/history/:id/favorite', protect, async (req, res) => {
