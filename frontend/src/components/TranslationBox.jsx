@@ -54,6 +54,191 @@ const TranslationBox = () => {
   const suggestionsRef = useRef(null);
   const ignoreSuggestionsRef = useRef(false);
 
+  // Spell Checker State & Refs
+  const overlayRef = useRef(null);
+  const textareaRef = useRef(null);
+  const popoverRef = useRef(null);
+  const [spellErrors, setSpellErrors] = useState([]);
+  const [ignoredWords, setIgnoredWords] = useState([]);
+  const [selectedError, setSelectedError] = useState(null);
+  const [showSpellPopover, setShowSpellPopover] = useState(false);
+  const [popoverCoords, setPopoverCoords] = useState({ x: 0, y: 0 });
+
+  // Fetch spelling errors debounced when typing in English
+  useEffect(() => {
+    if (sourceLanguage !== 'English') {
+      setSpellErrors([]);
+      return;
+    }
+
+    const trimmed = localInputText.trim();
+    if (!trimmed || trimmed.length < 3) {
+      setSpellErrors([]);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/translate/spellcheck`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ text: localInputText })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSpellErrors(data.errors || []);
+        }
+      } catch (error) {
+        console.error('Error fetching spellcheck:', error);
+      }
+    }, 600);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [localInputText, sourceLanguage]);
+
+  // Handle click outside spell popover to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        setShowSpellPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleTextareaScroll = (e) => {
+    if (overlayRef.current) {
+      overlayRef.current.scrollTop = e.target.scrollTop;
+      overlayRef.current.scrollLeft = e.target.scrollLeft;
+    }
+  };
+
+  const getWordAtPosition = (text, pos) => {
+    if (!text) return null;
+    let start = pos;
+    while (start > 0 && /\w/.test(text[start - 1])) {
+      start--;
+    }
+    let end = pos;
+    while (end < text.length && /\w/.test(text[end])) {
+      end++;
+    }
+    const word = text.slice(start, end);
+    if (word && /^[a-zA-Z]+$/.test(word)) {
+      return { word, start, end };
+    }
+    return null;
+  };
+
+  const checkWordAtCaret = (e) => {
+    if (sourceLanguage !== 'English') return;
+    const target = e.target;
+    const selectionStart = target.selectionStart;
+    const text = target.value;
+
+    const wordInfo = getWordAtPosition(text, selectionStart);
+    if (wordInfo) {
+      const { word, start, end } = wordInfo;
+      const err = spellErrors.find(e => 
+        e.word.toLowerCase() === word.toLowerCase() && 
+        !ignoredWords.includes(word.toLowerCase())
+      );
+      if (err) {
+        setSelectedError({
+          ...err,
+          word,
+          start,
+          end
+        });
+
+        const parentElement = target.parentElement;
+        if (parentElement) {
+          const rect = parentElement.getBoundingClientRect();
+          let x = e.clientX - rect.left;
+          let y = e.clientY - rect.top;
+
+          const popoverWidth = 180;
+          const popoverHeight = 150;
+          if (x + popoverWidth > rect.width) {
+            x = rect.width - popoverWidth - 10;
+          }
+          if (x < 10) x = 10;
+
+          if (y + popoverHeight > rect.height) {
+            y = y - popoverHeight - 10;
+          } else {
+            y = y + 15;
+          }
+
+          setPopoverCoords({ x, y });
+          setShowSpellPopover(true);
+          return;
+        }
+      }
+    }
+    setShowSpellPopover(false);
+  };
+
+  const handleTextareaClick = (e) => {
+    checkWordAtCaret(e);
+  };
+
+  const handleTextareaKeyUp = (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
+      setShowSpellPopover(false);
+    }
+  };
+
+  const handleApplyCorrection = (suggestion) => {
+    if (!selectedError) return;
+    const { start, end } = selectedError;
+    const before = localInputText.slice(0, start);
+    const after = localInputText.slice(end);
+    const newText = before + suggestion + after;
+    
+    setLocalInputText(newText);
+    dispatch(setInputText(newText));
+    setShowSpellPopover(false);
+    
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
+  const handleIgnoreError = (word) => {
+    setIgnoredWords(prev => [...prev, word.toLowerCase()]);
+    setShowSpellPopover(false);
+  };
+
+  const renderHighlightedText = () => {
+    if (spellErrors.length === 0) {
+      return localInputText;
+    }
+    const tokens = localInputText.split(/(\b\w+\b)/g);
+    return tokens.map((token, index) => {
+      const isIgnored = ignoredWords.includes(token.toLowerCase());
+      const err = !isIgnored && spellErrors.find(e => e.word.toLowerCase() === token.toLowerCase());
+      if (err) {
+        return (
+          <span 
+            key={index} 
+            className="bg-red-500/15 dark:bg-red-500/25 rounded"
+            style={{ 
+              textDecoration: 'none'
+            }}
+          >
+            {token}
+          </span>
+        );
+      }
+      return token;
+    });
+  };
+
+
   const LANGUAGE_LOCALES = {
     'English': 'en-US',
     'Sinhala': 'si-LK',
@@ -611,18 +796,80 @@ const TranslationBox = () => {
           
           {/* Input Area */}
           <div className="relative flex-1 p-4 sm:p-6 flex flex-col">
-            <textarea
-              className={`w-full flex-1 resize-none bg-transparent outline-none font-medium placeholder-slate-400/70 transition-colors duration-200 leading-relaxed pr-16 sm:pr-24 ${fontSize} ${fontColor}`}
-              placeholder="Translate..."
-              value={localInputText}
-              // RULE 2: No OnChange Fetching. Only updates local state, NEVER triggers API.
-              onChange={handleInputChange}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setShowSuggestions(false);
-                }
-              }}
-            />
+            <div className="relative flex-1 w-full">
+              {sourceLanguage === 'English' && (
+                <div 
+                  ref={overlayRef}
+                  className={`absolute inset-0 w-full h-full pointer-events-none whitespace-pre-wrap break-words border-0 p-0 m-0 font-medium leading-relaxed pr-16 sm:pr-24 overflow-y-auto ${fontSize}`}
+                  style={{
+                    color: 'transparent',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                  }}
+                >
+                  <style dangerouslySetInnerHTML={{__html: `
+                    .no-scrollbar::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}} />
+                  <div className="no-scrollbar h-full w-full overflow-y-auto pointer-events-none">
+                    {renderHighlightedText()}
+                  </div>
+                </div>
+              )}
+              <textarea
+                ref={textareaRef}
+                spellCheck="false"
+                className={`absolute inset-0 w-full h-full resize-none bg-transparent outline-none border-0 p-0 m-0 font-medium placeholder-slate-400/70 transition-colors duration-200 leading-relaxed pr-16 sm:pr-24 ${fontSize} ${fontColor}`}
+                placeholder="Translate..."
+                value={localInputText}
+                onChange={handleInputChange}
+                onScroll={handleTextareaScroll}
+                onClick={handleTextareaClick}
+                onKeyUp={handleTextareaKeyUp}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setShowSuggestions(false);
+                    setShowSpellPopover(false);
+                  }
+                }}
+              />
+              
+              {showSpellPopover && selectedError && (
+                <div 
+                  ref={popoverRef}
+                  className="absolute bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2 z-50 flex flex-col min-w-[160px] max-w-[240px] gap-1 transition-all duration-200"
+                  style={{
+                    left: `${popoverCoords.x}px`,
+                    top: `${popoverCoords.y}px`,
+                  }}
+                >
+                  <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 px-2.5 py-1 uppercase tracking-wider">
+                    Suggestions
+                  </div>
+                  {selectedError.suggestions && selectedError.suggestions.length > 0 ? (
+                    [...new Set(selectedError.suggestions)].map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleApplyCorrection(suggestion)}
+                        className="w-full text-left px-3 py-1.5 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        {suggestion}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-500 px-2.5 py-1">No suggestions</span>
+                  )}
+                  <hr className="border-slate-100 dark:border-slate-700/50 my-1" />
+                  <button
+                    onClick={() => handleIgnoreError(selectedError.word)}
+                    className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Ignore
+                  </button>
+                </div>
+              )}
+            </div>
             {showSuggestions && suggestions.length > 0 && (
               <motion.div 
                 ref={suggestionsRef}
