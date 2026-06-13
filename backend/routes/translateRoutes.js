@@ -409,23 +409,37 @@ Return ONLY a JSON object matching this schema:
 If there are no misspelled words, return {"errors": []}. Do NOT return markdown block formatting, code block markers, or explanations.`;
 
     let parsed;
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: text,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: 0.1,
-          responseMimeType: 'application/json'
-        }
-      });
 
-      const responseText = response.text.trim();
-      parsed = parseLLMJson(responseText);
-    } catch (geminiError) {
-      console.warn('Gemini spellcheck failed, trying Groq fallback:', geminiError.message || geminiError);
-      if (process.env.GROQ_API_KEY) {
+    // 1. Try Microsoft Bing Spell Check if a dedicated key is configured
+    if (process.env.MS_SPELLCHECK_KEY) {
+      try {
+        const key = process.env.MS_SPELLCHECK_KEY;
+        const response = await fetch(`https://api.bing.microsoft.com/v7.0/spellcheck?text=${encodeURIComponent(text)}&mode=proof`, {
+          method: 'GET',
+          headers: {
+            'Ocp-Apim-Subscription-Key': key
+          }
+        });
+        
+        if (response.ok) {
+          const bingData = await response.json();
+          const mappedErrors = (bingData.flaggedTokens || []).map(item => ({
+            word: item.token,
+            suggestions: (item.suggestions || []).map(s => s.suggestion)
+          }));
+          parsed = { errors: mappedErrors };
+          console.log('[SpellCheck] Successfully used Microsoft Bing Spell Check');
+        } else {
+          console.warn(`[SpellCheck] Microsoft spellcheck API returned status: ${response.status}`);
+        }
+      } catch (msError) {
+        console.warn('[SpellCheck] Microsoft spellcheck failed, falling back to Groq:', msError.message || msError);
+      }
+    }
+
+    // 2. If Microsoft is not configured or failed, use Groq AI
+    if (!parsed && process.env.GROQ_API_KEY) {
+      try {
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
         const response = await groq.chat.completions.create({
           messages: [
@@ -438,9 +452,14 @@ If there are no misspelled words, return {"errors": []}. Do NOT return markdown 
         });
         const responseText = response.choices[0].message.content.trim();
         parsed = parseLLMJson(responseText);
-      } else {
-        throw geminiError;
+        console.log('[SpellCheck] Successfully used Groq AI (Llama 70B)');
+      } catch (groqError) {
+        console.error('[SpellCheck] Groq spellcheck failed:', groqError.message || groqError);
       }
+    }
+
+    if (!parsed) {
+      throw new Error('All spellcheck providers failed or are not configured.');
     }
 
     res.json(parsed);
