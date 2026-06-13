@@ -242,8 +242,29 @@ Do NOT include any markdown formatting, code block markers (like \`\`\`json), or
         responseText = response.text.trim();
         parsedObject = parseLLMJson(responseText);
       } catch (err) {
-        console.error('Gemini translation failed:', err);
-        throw err;
+        console.warn('Gemini translation failed, attempting Groq fallback:', err.message || err);
+        if (process.env.GROQ_API_KEY) {
+          try {
+            const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+            const response = await groq.chat.completions.create({
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: inputText }
+              ],
+              model: 'llama-3.3-70b-versatile',
+              temperature: 0.3,
+              response_format: { type: "json_object" }
+            });
+            responseText = response.choices[0].message.content.trim();
+            parsedObject = parseLLMJson(responseText);
+            console.log('[Translation] Groq fallback translation succeeded.');
+          } catch (groqErr) {
+            console.error('[Translation] Groq fallback translation also failed:', groqErr.message || groqErr);
+            throw err;
+          }
+        } else {
+          throw err;
+        }
       }
 
     } else {
