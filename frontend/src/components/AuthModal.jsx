@@ -30,9 +30,8 @@ const AuthModal = () => {
       setTimeout(() => dispatch(resetAuth()), 3000);
     }
     
-    // If successfully logged in, close modal and fetch history
+    // If successfully logged in, close modal
     if (isSuccess && user) {
-      dispatch(fetchHistory());
       dispatch(resetAuth());
     }
   }, [isError, isSuccess, user, message, dispatch]);
@@ -77,7 +76,6 @@ const AuthModal = () => {
       const data = await res.json();
       contextLogin(data);
       dispatch(toggleAuthModal());
-      dispatch(fetchHistory());
     } catch (err) {
       console.error('Google Auth Error:', err);
     }
