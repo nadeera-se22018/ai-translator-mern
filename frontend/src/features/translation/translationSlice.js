@@ -161,7 +161,7 @@ const initialState = {
   translationMode: 'gemini', // 'normal', 'microsoft', 'gemini', or 'groq'
   isLoading: false,
   error: null,
-  history: [],
+  history: JSON.parse(localStorage.getItem('lk_history') || '[]'),
   favorites: JSON.parse(localStorage.getItem('lk_favorites') || '[]'),
   historyTab: 'history', // 'history' or 'favorites'
   cachedTranslations: { 
@@ -281,6 +281,7 @@ const translationSlice = createSlice({
         if (state.history.length > 30) {
           state.history.pop();
         }
+        localStorage.setItem('lk_history', JSON.stringify(state.history));
       })
       .addCase(translateText.rejected, (state, action) => {
         state.isLoading = false;
@@ -291,6 +292,7 @@ const translationSlice = createSlice({
         state.history = action.payload;
         state.favorites = action.payload.filter(item => item.isFavorite);
         localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+        localStorage.setItem('lk_history', JSON.stringify(state.history));
       })
       .addCase(toggleFavoriteDb.pending, (state, action) => {
         const item = action.meta.arg;
@@ -333,6 +335,7 @@ const translationSlice = createSlice({
 
         // Always save to localStorage immediately for low-latency persistence
         localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+        localStorage.setItem('lk_history', JSON.stringify(state.history));
       })
       .addCase(toggleFavoriteDb.fulfilled, (state, action) => {
         const { item, updatedItem, loggedIn } = action.payload;
@@ -378,6 +381,7 @@ const translationSlice = createSlice({
           }
 
           localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+          localStorage.setItem('lk_history', JSON.stringify(state.history));
         }
       })
       .addCase(toggleFavoriteDb.rejected, (state, action) => {
@@ -424,16 +428,19 @@ const translationSlice = createSlice({
         }
 
         localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+        localStorage.setItem('lk_history', JSON.stringify(state.history));
       })
       .addCase(syncFavorites.fulfilled, (state, action) => {
         state.history = action.payload;
         state.favorites = action.payload.filter(item => item.isFavorite);
         localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+        localStorage.setItem('lk_history', JSON.stringify(state.history));
       })
       .addCase(logout, (state) => {
         state.history = [];
         state.favorites = [];
         localStorage.removeItem('lk_favorites');
+        localStorage.removeItem('lk_history');
       });
   },
 });
