@@ -508,4 +508,114 @@ router.patch('/history/:id/favorite', protect, async (req, res) => {
   }
 });
 
+// @desc    Add a translation directly to favorites (or toggle/save it if it has no id)
+// @route   POST /api/translate/history/favorite
+router.post('/history/favorite', protect, async (req, res) => {
+  try {
+    const { inputText, translatedText, sourceLanguage, targetLanguage, mode } = req.body;
+
+    if (!inputText || !translatedText || !sourceLanguage || !targetLanguage) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    // Check if a translation with these exact details already exists for this user
+    let translation = await Translation.findOne({
+      user: req.user._id,
+      inputText,
+      sourceLanguage,
+      targetLanguage,
+      mode
+    });
+
+    if (translation) {
+      // Toggle favorite status
+      translation.isFavorite = !translation.isFavorite;
+      await translation.save();
+    } else {
+      // Create translation as a favorite
+      translation = new Translation({
+        user: req.user._id,
+        inputText,
+        translatedText: typeof translatedText === 'object' ? JSON.stringify(translatedText) : translatedText,
+        sourceLanguage,
+        targetLanguage,
+        mode,
+        isFavorite: true
+      });
+      await translation.save();
+    }
+
+    const translationObj = translation.toObject();
+    try {
+      translationObj.translatedText = JSON.parse(translationObj.translatedText);
+    } catch (e) {
+      translationObj.translatedText = {
+        best: translationObj.translatedText,
+        alternatives: []
+      };
+    }
+
+    res.status(201).json(translationObj);
+  } catch (error) {
+    console.error('Create Favorite Error:', error);
+    res.status(500).json({ error: 'Server Error' });
+  }
+});
+
+// @desc    Sync local guest favorites to user account
+// @route   POST /api/translate/history/sync
+router.post('/history/sync', protect, async (req, res) => {
+  try {
+    const { localFavorites = [] } = req.body;
+
+    for (const item of localFavorites) {
+      const exists = await Translation.findOne({
+        user: req.user._id,
+        inputText: item.inputText,
+        sourceLanguage: item.sourceLanguage,
+        targetLanguage: item.targetLanguage,
+        mode: item.mode
+      });
+
+      if (!exists) {
+        const newTranslation = new Translation({
+          user: req.user._id,
+          inputText: item.inputText,
+          translatedText: typeof item.translatedText === 'object' ? JSON.stringify(item.translatedText) : item.translatedText,
+          sourceLanguage: item.sourceLanguage,
+          targetLanguage: item.targetLanguage,
+          mode: item.mode,
+          isFavorite: true
+        });
+        await newTranslation.save();
+      } else {
+        if (!exists.isFavorite) {
+          exists.isFavorite = true;
+          await exists.save();
+        }
+      }
+    }
+
+    // Fetch the updated history for the user
+    const history = await Translation.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50);
+    const parsedHistory = history.map(item => {
+      const itemObj = item.toObject();
+      try {
+        itemObj.translatedText = JSON.parse(itemObj.translatedText);
+      } catch (e) {
+        itemObj.translatedText = {
+          best: itemObj.translatedText,
+          alternatives: []
+        };
+      }
+      return itemObj;
+    });
+
+    res.json(parsedHistory);
+  } catch (error) {
+    console.error('History Sync Error:', error);
+    res.status(500).json({ error: 'Server Error' });
+  }
+});
+
 module.exports = router;
