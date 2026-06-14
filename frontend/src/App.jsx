@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { fetchHistory } from './features/translation/translationSlice';
+import { fetchHistory, syncFavorites } from './features/translation/translationSlice';
 import Header from './components/Header';
 import TranslationBox from './components/TranslationBox';
 import HistoryList from './components/HistoryList';
@@ -15,7 +15,12 @@ function App() {
 
   useEffect(() => {
     if (user) {
-      dispatch(fetchHistory());
+      const localFavorites = JSON.parse(localStorage.getItem('lk_favorites') || '[]');
+      if (localFavorites.length > 0) {
+        dispatch(syncFavorites());
+      } else {
+        dispatch(fetchHistory());
+      }
     }
   }, [user, dispatch]);
 
