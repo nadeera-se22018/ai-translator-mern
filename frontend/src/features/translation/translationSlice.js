@@ -71,28 +71,84 @@ export const toggleFavoriteDb = createAsyncThunk(
       const state = thunkAPI.getState();
       const token = state.auth.user ? state.auth.user.token : null;
 
-      // If user is logged in and translation has an _id, sync with backend database
-      if (token && item._id) {
-        const response = await fetch(`${API_BASE_URL}/api/translate/history/${item._id}/favorite`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+      if (token) {
+        if (item._id) {
+          const response = await fetch(`${API_BASE_URL}/api/translate/history/${item._id}/favorite`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
 
-        if (!response.ok) {
-          return thunkAPI.rejectWithValue('Failed to toggle favorite on database');
+          if (!response.ok) {
+            return thunkAPI.rejectWithValue('Failed to toggle favorite on database');
+          }
+
+          const updatedItem = await response.json();
+          return { item, updatedItem, loggedIn: true };
+        } else {
+          const response = await fetch(`${API_BASE_URL}/api/translate/history/favorite`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              inputText: item.inputText,
+              translatedText: item.translatedText,
+              sourceLanguage: item.sourceLanguage,
+              targetLanguage: item.targetLanguage,
+              mode: item.mode
+            }),
+          });
+
+          if (!response.ok) {
+            return thunkAPI.rejectWithValue('Failed to save and toggle favorite on database');
+          }
+
+          const updatedItem = await response.json();
+          return { item, updatedItem, loggedIn: true };
         }
-
-        const updatedItem = await response.json();
-        return { item, updatedItem, loggedIn: true };
       }
 
       // Guest flow: locally toggled
       return { item, loggedIn: false };
     } catch (error) {
       return thunkAPI.rejectWithValue(error.message || 'Network error occurred');
+    }
+  }
+);
+
+export const syncFavorites = createAsyncThunk(
+  'translation/syncFavorites',
+  async (_, thunkAPI) => {
+    try {
+      const state = thunkAPI.getState();
+      const token = state.auth.user ? state.auth.user.token : null;
+      const localFavorites = state.translation.favorites;
+
+      if (!token || localFavorites.length === 0) {
+        return thunkAPI.rejectWithValue('No token or local favorites');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/translate/history/sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          },
+        body: JSON.stringify({ localFavorites }),
+      });
+
+      if (!response.ok) {
+        return thunkAPI.rejectWithValue('Failed to sync favorites');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(error.message || 'Network error');
     }
   }
 );
@@ -234,11 +290,53 @@ const translationSlice = createSlice({
       .addCase(fetchHistory.fulfilled, (state, action) => {
         state.history = action.payload;
         state.favorites = action.payload.filter(item => item.isFavorite);
+        localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+      })
+      .addCase(toggleFavoriteDb.pending, (state, action) => {
+        const item = action.meta.arg;
+        
+        // Find if it's already in favorites
+        const existingIndex = state.favorites.findIndex((fav) => {
+          if (item._id && fav._id) {
+            return fav._id === item._id;
+          }
+          const favText = typeof fav.translatedText === 'object' && fav.translatedText !== null ? fav.translatedText.best : fav.translatedText;
+          const itemText = typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText;
+          return fav.inputText === item.inputText && favText === itemText;
+        });
+
+        // Toggle isFavorite in history array
+        const histIndex = state.history.findIndex(h => {
+          if (item._id && h._id) {
+            return h._id === item._id;
+          }
+          const hText = typeof h.translatedText === 'object' && h.translatedText !== null ? h.translatedText.best : h.translatedText;
+          const itemText = typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText;
+          return h.inputText === item.inputText && hText === itemText;
+        });
+
+        if (histIndex >= 0) {
+          state.history[histIndex].isFavorite = !state.history[histIndex].isFavorite;
+        }
+
+        if (existingIndex >= 0) {
+          state.favorites.splice(existingIndex, 1);
+        } else {
+          const newItem = { ...item, isFavorite: true };
+          try {
+            if (typeof newItem.translatedText === 'string') {
+              newItem.translatedText = JSON.parse(newItem.translatedText);
+            }
+          } catch (e) {}
+          state.favorites.unshift(newItem);
+        }
+
+        // Always save to localStorage immediately for low-latency persistence
+        localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
       })
       .addCase(toggleFavoriteDb.fulfilled, (state, action) => {
         const { item, updatedItem, loggedIn } = action.payload;
-        if (loggedIn) {
-          // Parse updatedItem translation back to object format
+        if (loggedIn && updatedItem) {
           let parsedUpdatedItem = { ...updatedItem };
           try {
             if (typeof parsedUpdatedItem.translatedText === 'string') {
@@ -248,33 +346,89 @@ const translationSlice = createSlice({
             parsedUpdatedItem.translatedText = { best: parsedUpdatedItem.translatedText, alternatives: [] };
           }
           
-          // Update the item in the history array
-          const histIndex = state.history.findIndex(h => h._id === parsedUpdatedItem._id);
+          // Update the item in the history array to have the correct DB fields (e.g. ID)
+          const histIndex = state.history.findIndex(h => {
+            if (h._id === parsedUpdatedItem._id) return true;
+            const hText = typeof h.translatedText === 'object' && h.translatedText !== null ? h.translatedText.best : h.translatedText;
+            const itemText = typeof parsedUpdatedItem.translatedText === 'object' && parsedUpdatedItem.translatedText !== null ? parsedUpdatedItem.translatedText.best : parsedUpdatedItem.translatedText;
+            return h.inputText === parsedUpdatedItem.inputText && hText === itemText;
+          });
           if (histIndex >= 0) {
             state.history[histIndex] = parsedUpdatedItem;
           }
-          // Update the favorites array
-          const favIndex = state.favorites.findIndex(f => f._id === parsedUpdatedItem._id);
-          if (favIndex >= 0) {
-            state.favorites.splice(favIndex, 1);
-          } else {
-            state.favorites.unshift(parsedUpdatedItem);
-          }
-        } else {
-          // Guest mode: handle locally using inputs/translated text match
-          const existingIndex = state.favorites.findIndex((fav) => {
-            const favText = typeof fav.translatedText === 'object' && fav.translatedText !== null ? fav.translatedText.best : fav.translatedText;
-            const itemText = typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText;
-            return fav.inputText === item.inputText && favText === itemText;
+
+          // Sync the favorites array
+          const favIndex = state.favorites.findIndex(f => {
+            if (f._id === parsedUpdatedItem._id) return true;
+            const favText = typeof f.translatedText === 'object' && f.translatedText !== null ? f.translatedText.best : f.translatedText;
+            const itemText = typeof parsedUpdatedItem.translatedText === 'object' && parsedUpdatedItem.translatedText !== null ? parsedUpdatedItem.translatedText.best : parsedUpdatedItem.translatedText;
+            return f.inputText === parsedUpdatedItem.inputText && favText === itemText;
           });
-          
-          if (existingIndex >= 0) {
-            state.favorites.splice(existingIndex, 1);
+
+          if (parsedUpdatedItem.isFavorite) {
+            if (favIndex >= 0) {
+              state.favorites[favIndex] = parsedUpdatedItem;
+            } else {
+              state.favorites.unshift(parsedUpdatedItem);
+            }
           } else {
-            state.favorites.unshift(item);
+            if (favIndex >= 0) {
+              state.favorites.splice(favIndex, 1);
+            }
           }
+
           localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
         }
+      })
+      .addCase(toggleFavoriteDb.rejected, (state, action) => {
+        const item = action.meta.arg;
+        const wasFavorite = item.isFavorite;
+
+        // Revert in history array
+        const histIndex = state.history.findIndex(h => {
+          if (item._id && h._id) {
+            return h._id === item._id;
+          }
+          const hText = typeof h.translatedText === 'object' && h.translatedText !== null ? h.translatedText.best : h.translatedText;
+          const itemText = typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText;
+          return h.inputText === item.inputText && hText === itemText;
+        });
+        if (histIndex >= 0) {
+          state.history[histIndex].isFavorite = wasFavorite;
+        }
+
+        // Revert in favorites array
+        const favIndex = state.favorites.findIndex(f => {
+          if (item._id && f._id) {
+            return f._id === item._id;
+          }
+          const favText = typeof f.translatedText === 'object' && f.translatedText !== null ? f.translatedText.best : f.translatedText;
+          const itemText = typeof item.translatedText === 'object' && item.translatedText !== null ? item.translatedText.best : item.translatedText;
+          return f.inputText === item.inputText && favText === itemText;
+        });
+
+        if (wasFavorite) {
+          if (favIndex < 0) {
+            const newItem = { ...item, isFavorite: true };
+            try {
+              if (typeof newItem.translatedText === 'string') {
+                newItem.translatedText = JSON.parse(newItem.translatedText);
+              }
+            } catch (e) {}
+            state.favorites.unshift(newItem);
+          }
+        } else {
+          if (favIndex >= 0) {
+            state.favorites.splice(favIndex, 1);
+          }
+        }
+
+        localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
+      })
+      .addCase(syncFavorites.fulfilled, (state, action) => {
+        state.history = action.payload;
+        state.favorites = action.payload.filter(item => item.isFavorite);
+        localStorage.setItem('lk_favorites', JSON.stringify(state.favorites));
       })
       .addCase(logout, (state) => {
         state.history = [];
