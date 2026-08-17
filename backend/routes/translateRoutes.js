@@ -251,7 +251,7 @@ Do NOT include any markdown formatting, code block markers (like \`\`\`json), or
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: inputText }
               ],
-              model: 'llama-3.3-70b-versatile',
+              model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
               temperature: 0.3,
               response_format: { type: "json_object" }
             });
@@ -287,7 +287,7 @@ Do NOT include any markdown formatting, code block markers (like \`\`\`json), or
             { role: 'system', content: systemPrompt },
             { role: 'user', content: inputText }
           ],
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
           temperature: 0.3,
           response_format: { type: "json_object" }
         });
@@ -467,13 +467,13 @@ If there are no misspelled words, return {"errors": []}. Do NOT return markdown 
             { role: 'system', content: systemPrompt },
             { role: 'user', content: text }
           ],
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
           temperature: 0.1,
           response_format: { type: "json_object" }
         });
         const responseText = response.choices[0].message.content.trim();
         parsed = parseLLMJson(responseText);
-        console.log('[SpellCheck] Successfully used Groq AI (Llama 70B)');
+        console.log(`[SpellCheck] Successfully used Groq AI (${process.env.GROQ_MODEL || 'openai/gpt-oss-120b'})`);
       } catch (groqError) {
         console.error('[SpellCheck] Groq spellcheck failed:', groqError.message || groqError);
       }
